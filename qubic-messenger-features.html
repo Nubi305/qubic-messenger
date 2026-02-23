@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qubic Messenger — Features Preview</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<style>
+  :root {
+    --purple: #6055ff;
+    --teal: #00d4aa;
+    --bg: #050508;
+    --surface: #0c0c14;
+    --border: #1c1c30;
+    --text: #f0f0f8;
+    --muted: #5a5a7a;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: var(--bg); color: var(--text); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
+  /* ── NAV ── */
+  nav { display: flex; gap: 8px; padding: 16px 24px; background: var(--surface); border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+  .tab { padding: 8px 18px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); cursor: pointer; font-size: 13px; font-weight: 600; transition: all .15s; }
+  .tab.active, .tab:hover { background: var(--purple); color: #fff; border-color: var(--purple); }
+  .section { display: none; padding: 32px 24px; max-width: 900px; margin: 0 auto; }
+  .section.active { display: block; }
+
+  /* ── WALLET CONNECT ── */
+  .wc-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; max-width: 440px; margin: 0 auto; text-align: center; }
+  .wc-logo { font-size: 48px; margin-bottom: 16px; }
+  .wc-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .wc-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; line-height: 1.6; }
+  .wc-btn { width: 100%; padding: 14px; border-radius: 14px; border: 1px solid var(--border); background: var(--surface); color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 12px; margin-bottom: 10px; transition: all .15s; }
+  .wc-btn:hover { border-color: var(--purple); background: #111120; }
+  .wc-btn.primary { background: var(--purple); border-color: var(--purple); color: #fff; justify-content: center; }
+  .wc-btn.primary:hover { background: #5048ee; }
+  .wc-btn-icon { font-size: 22px; }
+  .wc-divider { display: flex; align-items: center; gap: 12px; margin: 16px 0; }
+  .wc-divider span { color: var(--muted); font-size: 12px; }
+  .wc-divider::before, .wc-divider::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+  .wc-input { width: 100%; padding: 12px 16px; border-radius: 12px; border: 1px solid var(--border); background: #111120; color: var(--text); font-family: monospace; font-size: 12px; margin-bottom: 10px; }
+  .wc-input:focus { outline: none; border-color: var(--purple); }
+  .wc-connected { background: rgba(0,212,170,0.1); border: 1px solid var(--teal); border-radius: 12px; padding: 16px; margin-top: 16px; display: none; }
+  .wc-address { font-family: monospace; font-size: 12px; color: var(--teal); word-break: break-all; }
+
+  /* ── REACTIONS ── */
+  .chat-demo { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 24px; }
+  .msg-group { margin-bottom: 20px; }
+  .msg-bubble { display: inline-block; padding: 10px 16px; border-radius: 16px; max-width: 75%; position: relative; font-size: 14px; line-height: 1.5; }
+  .msg-me { background: #2a1f6e; border: 1px solid rgba(96,85,255,.2); border-bottom-right-radius: 4px; float: right; clear: both; }
+  .msg-them { background: #111120; border: 1px solid var(--border); border-bottom-left-radius: 4px; float: left; clear: both; }
+  .msg-wrap { overflow: hidden; margin-bottom: 4px; }
+  .reactions-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+  .reaction { background: #111120; border: 1px solid var(--border); border-radius: 20px; padding: 4px 10px; font-size: 13px; cursor: pointer; transition: all .15s; display: flex; align-items: center; gap: 4px; }
+  .reaction:hover, .reaction.active { background: rgba(96,85,255,.15); border-color: var(--purple); }
+  .reaction .count { font-size: 11px; color: var(--muted); font-weight: 600; }
+  .reaction-picker { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 12px; display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+  .emoji-btn { font-size: 22px; cursor: pointer; padding: 6px; border-radius: 10px; transition: background .1s; }
+  .emoji-btn:hover { background: var(--border); }
+  .typing { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 13px; margin-top: 8px; }
+  .typing-dots { display: flex; gap: 3px; }
+  .dot { width: 6px; height: 6px; background: var(--muted); border-radius: 50%; animation: bounce 1.2s infinite; }
+  .dot:nth-child(2) { animation-delay: .2s; }
+  .dot:nth-child(3) { animation-delay: .4s; }
+  @keyframes bounce { 0%,60%,100%{transform:translateY(0)} 30%{transform:translateY(-6px)} }
+  .read-receipt { font-size: 11px; color: var(--teal); float: right; margin-top: 4px; }
+  .msg-time { font-size: 10px; color: var(--muted); float: right; margin-top: 4px; margin-left: 8px; }
+  .clearfix::after { content: ''; display: table; clear: both; }
+
+  /* ── ROADMAP ── */
+  .roadmap { display: flex; flex-direction: column; gap: 0; position: relative; }
+  .roadmap::before { content: ''; position: absolute; left: 23px; top: 0; bottom: 0; width: 2px; background: var(--border); z-index: 0; }
+  .rm-item { display: flex; gap: 20px; position: relative; z-index: 1; }
+  .rm-dot { width: 48px; height: 48px; border-radius: 14px; display: flex; align-items: center; justify-content: center; font-size: 20px; flex-shrink: 0; border: 2px solid var(--border); background: var(--surface); }
+  .rm-dot.done { background: var(--purple); border-color: var(--purple); }
+  .rm-dot.active { background: rgba(96,85,255,.2); border-color: var(--purple); }
+  .rm-content { background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 20px; flex: 1; margin-bottom: 16px; }
+  .rm-content.active { border-color: var(--purple); }
+  .rm-quarter { font-size: 11px; font-weight: 700; color: var(--purple); text-transform: uppercase; letter-spacing: 2px; margin-bottom: 6px; }
+  .rm-title { font-size: 17px; font-weight: 800; margin-bottom: 8px; }
+  .rm-items { display: flex; flex-wrap: wrap; gap: 6px; }
+  .rm-tag { background: #111120; border: 1px solid var(--border); border-radius: 8px; padding: 4px 10px; font-size: 12px; color: var(--muted); }
+  .rm-tag.done { color: var(--teal); border-color: rgba(0,212,170,.3); background: rgba(0,212,170,.05); }
+  .rm-tag.active { color: var(--purple); border-color: rgba(96,85,255,.3); background: rgba(96,85,255,.05); }
+
+  /* ── QR CODE ── */
+  .qr-card { background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 32px; max-width: 400px; margin: 0 auto; text-align: center; }
+  #qrcode { display: flex; justify-content: center; margin: 20px 0; }
+  #qrcode canvas, #qrcode img { border-radius: 12px; padding: 12px; background: white; }
+  .qr-address { font-family: monospace; font-size: 11px; color: var(--muted); word-break: break-all; background: #111120; padding: 10px; border-radius: 10px; margin-bottom: 16px; }
+  .copy-btn { background: var(--purple); border: none; color: white; padding: 12px 28px; border-radius: 12px; font-weight: 700; cursor: pointer; font-size: 14px; transition: background .15s; }
+  .copy-btn:hover { background: #5048ee; }
+  .share-row { display: flex; gap: 10px; justify-content: center; margin-top: 12px; }
+  .share-btn { flex: 1; padding: 10px; border-radius: 10px; border: 1px solid var(--border); background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; cursor: pointer; transition: all .15s; }
+  .share-btn:hover { border-color: var(--purple); color: var(--text); }
+
+  /* ── MISC ── */
+  .section-title { font-size: 24px; font-weight: 800; margin-bottom: 8px; }
+  .section-sub { color: var(--muted); font-size: 14px; margin-bottom: 28px; }
+  .badge { display: inline-block; background: rgba(96,85,255,.15); color: var(--purple); border: 1px solid rgba(96,85,255,.3); border-radius: 8px; padding: 3px 10px; font-size: 11px; font-weight: 700; margin-left: 8px; }
+</style>
+</head>
+<body>
+
+<nav>
+  <button class="tab active" onclick="show('wallet')">🔗 Wallet Connect</button>
+  <button class="tab" onclick="show('reactions')">😍 Reactions & Typing</button>
+  <button class="tab" onclick="show('roadmap')">🗺️ Roadmap</button>
+  <button class="tab" onclick="show('qr')">📱 QR Code</button>
+</nav>
+
+<!-- ══════════════════════════════════════════════════════ WALLET CONNECT -->
+<div id="wallet" class="section active">
+  <div class="section-title">Wallet Connect <span class="badge">MetaMask-style</span></div>
+  <div class="section-sub">Connect your Qubic wallet to start messaging — no account creation needed.</div>
+
+  <div class="wc-card">
+    <div class="wc-logo">🔐</div>
+    <div class="wc-title">Connect to Qubic Messenger</div>
+    <div class="wc-sub">Use your Qubic wallet as your identity. No phone number, no email, no password.</div>
+
+    <button class="wc-btn primary" onclick="connectQubic()">
+      ⚡ Connect Qubic Vault
+    </button>
+
+    <button class="wc-btn" onclick="connectMetamask()">
+      <span class="wc-btn-icon">🦊</span> MetaMask Snap (coming soon)
+    </button>
+
+    <button class="wc-btn" onclick="showSeed()">
+      <span class="wc-btn-icon">🌱</span> Import Seed Phrase
+    </button>
+
+    <div class="wc-divider"><span>or enter manually</span></div>
+
+    <input class="wc-input" id="manualAddr" placeholder="Paste your Qubic address (60 chars)..." maxlength="60">
+    <button class="wc-btn primary" onclick="connectManual()">Connect Address</button>
+
+    <div class="wc-connected" id="connectedBox">
+      <div style="color: var(--teal); font-weight: 700; margin-bottom: 8px;">✓ Connected!</div>
+      <div class="wc-address" id="connectedAddr"></div>
+      <div style="color: var(--muted); font-size: 12px; margin-top: 8px;">Your encryption keys have been derived from your wallet seed.</div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ REACTIONS -->
+<div id="reactions" class="section">
+  <div class="section-title">Reactions & Typing Indicators</div>
+  <div class="section-sub">Click any emoji below to react to a message. Watch typing in real-time.</div>
+
+  <div style="margin-bottom: 16px;">
+    <div style="font-size: 12px; color: var(--muted); margin-bottom: 8px;">REACT WITH:</div>
+    <div class="reaction-picker">
+      <span class="emoji-btn" onclick="addReaction('👍')">👍</span>
+      <span class="emoji-btn" onclick="addReaction('❤️')">❤️</span>
+      <span class="emoji-btn" onclick="addReaction('🔥')">🔥</span>
+      <span class="emoji-btn" onclick="addReaction('😂')">😂</span>
+      <span class="emoji-btn" onclick="addReaction('🚀')">🚀</span>
+      <span class="emoji-btn" onclick="addReaction('🔐')">🔐</span>
+      <span class="emoji-btn" onclick="addReaction('💎')">💎</span>
+      <span class="emoji-btn" onclick="addReaction('⚡')">⚡</span>
+    </div>
+  </div>
+
+  <div class="chat-demo">
+    <div class="msg-group">
+      <div class="msg-wrap clearfix">
+        <div class="msg-bubble msg-them">
+          Hey! Did you see the Qubic Messenger demo? 🔥
+          <div class="msg-time">14:22</div>
+        </div>
+      </div>
+      <div class="reactions-bar" id="r1">
+        <div class="reaction active" onclick="toggleReaction(this)">🔥 <span class="count">3</span></div>
+        <div class="reaction" onclick="toggleReaction(this)">👍 <span class="count">1</span></div>
+      </div>
+    </div>
+
+    <div class="msg-group">
+      <div class="msg-wrap clearfix">
+        <div class="msg-bubble msg-me">
+          Yes!! Zero fees, fully encrypted. This is what crypto messaging should look like 🚀
+          <div class="msg-time">14:23</div>
+          <div class="read-receipt">✓✓ Read</div>
+        </div>
+      </div>
+      <div class="reactions-bar" id="r2">
+        <div class="reaction active" onclick="toggleReaction(this)">🚀 <span class="count">5</span></div>
+        <div class="reaction" onclick="toggleReaction(this)">💎 <span class="count">2</span></div>
+      </div>
+    </div>
+
+    <div class="msg-group">
+      <div class="msg-wrap clearfix">
+        <div class="msg-bubble msg-them">
+          And you can share your address with a QR code — so clean!
+          <div class="msg-time">14:24</div>
+        </div>
+      </div>
+      <div class="reactions-bar" id="r3"></div>
+    </div>
+
+    <div class="typing" id="typingIndicator" style="display:none">
+      <div style="width:28px; height:28px; border-radius:8px; background:#1c1c30; display:flex; align-items:center; justify-content:center; font-size:12px;">A</div>
+      <div class="typing-dots">
+        <div class="dot"></div><div class="dot"></div><div class="dot"></div>
+      </div>
+      <span>Alice is typing…</span>
+    </div>
+  </div>
+
+  <div style="margin-top: 16px; display: flex; gap: 10px;">
+    <button onclick="simulateTyping()" style="background: var(--purple); border: none; color: white; padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 700;">Simulate Typing</button>
+    <button onclick="addReaction('🔥')" style="background: var(--surface); border: 1px solid var(--border); color: var(--text); padding: 10px 20px; border-radius: 10px; cursor: pointer; font-weight: 700;">React to Last Message</button>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ ROADMAP -->
+<div id="roadmap" class="section">
+  <div class="section-title">Project Roadmap</div>
+  <div class="section-sub">From testnet to mainnet — here's where we're going.</div>
+
+  <div class="roadmap">
+    <div class="rm-item">
+      <div class="rm-dot done">✓</div>
+      <div class="rm-content">
+        <div class="rm-quarter">Q1 2026 — Now</div>
+        <div class="rm-title">Foundation 🏗️</div>
+        <div class="rm-items">
+          <span class="rm-tag done">Smart contract (C++/QPI)</span>
+          <span class="rm-tag done">E2EE crypto layer</span>
+          <span class="rm-tag done">P2P relay server</span>
+          <span class="rm-tag done">IPFS offline inbox</span>
+          <span class="rm-tag done">Landing page</span>
+          <span class="rm-tag done">GitHub repo public</span>
+          <span class="rm-tag active">Testnet deployment</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot active">🚀</div>
+      <div class="rm-content active">
+        <div class="rm-quarter">Q2 2026 — In Progress</div>
+        <div class="rm-title">Web Beta Launch 🌐</div>
+        <div class="rm-items">
+          <span class="rm-tag active">Next.js web app</span>
+          <span class="rm-tag active">Wallet connect</span>
+          <span class="rm-tag active">QR code sharing</span>
+          <span class="rm-tag active">Message history search</span>
+          <span class="rm-tag active">Push notifications</span>
+          <span class="rm-tag active">Dark/light theme</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot">📱</div>
+      <div class="rm-content">
+        <div class="rm-quarter">Q3 2026</div>
+        <div class="rm-title">Mobile Apps</div>
+        <div class="rm-items">
+          <span class="rm-tag">iOS app (App Store)</span>
+          <span class="rm-tag">Android app (Play Store)</span>
+          <span class="rm-tag">Group chats (50 members)</span>
+          <span class="rm-tag">Message reactions</span>
+          <span class="rm-tag">Read receipts</span>
+          <span class="rm-tag">Token gating</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot">💎</div>
+      <div class="rm-content">
+        <div class="rm-quarter">Q4 2026</div>
+        <div class="rm-title">Mainnet IPO</div>
+        <div class="rm-items">
+          <span class="rm-tag">Community quorum vote</span>
+          <span class="rm-tag">QMSG token IPO</span>
+          <span class="rm-tag">Security audit</span>
+          <span class="rm-tag">Key rotation v2</span>
+          <span class="rm-tag">Mainnet deployment</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rm-item">
+      <div class="rm-dot">🌍</div>
+      <div class="rm-content">
+        <div class="rm-quarter">2027</div>
+        <div class="rm-title">Ecosystem Growth</div>
+        <div class="rm-items">
+          <span class="rm-tag">Developer SDK</span>
+          <span class="rm-tag">Third-party integrations</span>
+          <span class="rm-tag">DAO governance</span>
+          <span class="rm-tag">Oracle-verified delivery</span>
+          <span class="rm-tag">1M users target</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════ QR CODE -->
+<div id="qr" class="section">
+  <div class="section-title">QR Code Address Sharing</div>
+  <div class="section-sub">Share your Qubic address instantly — anyone can scan to start a private conversation.</div>
+
+  <div class="qr-card">
+    <div style="font-weight: 800; font-size: 18px; margin-bottom: 4px;">Your Qubic Address</div>
+    <div style="color: var(--muted); font-size: 13px; margin-bottom: 20px;">Scan to send an encrypted message</div>
+
+    <div class="qr-address" id="qrAddrDisplay">NUBIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID</div>
+
+    <div id="qrcode"></div>
+
+    <input
+      id="qrInput"
+      style="width:100%; padding:10px 14px; border-radius:10px; border:1px solid var(--border); background:#111120; color:var(--text); font-family:monospace; font-size:11px; margin-bottom:12px;"
+      placeholder="Paste your Qubic address..."
+      oninput="updateQR(this.value)"
+    >
+
+    <button class="copy-btn" onclick="copyAddr()">Copy Address</button>
+
+    <div class="share-row">
+      <button class="share-btn" onclick="downloadQR()">⬇ Download QR</button>
+      <button class="share-btn" onclick="shareAddr()">↗ Share Link</button>
+    </div>
+
+    <div style="margin-top: 20px; padding: 12px; background: rgba(0,212,170,0.05); border: 1px solid rgba(0,212,170,0.2); border-radius: 12px;">
+      <div style="color: var(--teal); font-size: 12px; font-weight: 700; margin-bottom: 4px;">🔒 Privacy Note</div>
+      <div style="color: var(--muted); font-size: 12px; line-height: 1.6;">Sharing your Qubic address does not reveal your identity. Your address is pseudonymous — only you control the private key.</div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── Tab switching ─────────────────────────────────────────────────────────────
+function show(id) {
+  document.querySelectorAll('.section').forEach(s => s.classList.remove('active'))
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'))
+  document.getElementById(id).classList.add('active')
+  event.target.classList.add('active')
+  if (id === 'qr') initQR()
+}
+
+// ── Wallet Connect ────────────────────────────────────────────────────────────
+function connectQubic() {
+  const addr = 'NUBIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID'
+  showConnected(addr)
+}
+function connectMetamask() {
+  alert('MetaMask Snap integration coming in Q2 2026!')
+}
+function showSeed() {
+  const seed = prompt('Enter your 55-character Qubic seed phrase:')
+  if (seed && seed.length >= 20) {
+    const addr = 'DERIVED' + seed.slice(0,10).toUpperCase() + 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID'
+    showConnected(addr.slice(0, 60))
+  }
+}
+function connectManual() {
+  const addr = document.getElementById('manualAddr').value.trim()
+  if (addr.length >= 20) showConnected(addr)
+  else alert('Please enter a valid Qubic address')
+}
+function showConnected(addr) {
+  document.getElementById('connectedAddr').textContent = addr
+  document.getElementById('connectedBox').style.display = 'block'
+}
+
+// ── Reactions ─────────────────────────────────────────────────────────────────
+let lastTarget = 'r3'
+function addReaction(emoji) {
+  const bar = document.getElementById(lastTarget)
+  const existing = [...bar.querySelectorAll('.reaction')].find(r => r.textContent.trim().startsWith(emoji))
+  if (existing) {
+    existing.classList.toggle('active')
+    const cnt = existing.querySelector('.count')
+    cnt.textContent = parseInt(cnt.textContent) + (existing.classList.contains('active') ? 1 : -1)
+  } else {
+    const div = document.createElement('div')
+    div.className = 'reaction active'
+    div.innerHTML = `${emoji} <span class="count">1</span>`
+    div.onclick = () => toggleReaction(div)
+    bar.appendChild(div)
+  }
+  lastTarget = ['r1','r2','r3'][Math.floor(Math.random()*3)]
+}
+function toggleReaction(el) {
+  el.classList.toggle('active')
+  const cnt = el.querySelector('.count')
+  cnt.textContent = parseInt(cnt.textContent) + (el.classList.contains('active') ? 1 : -1)
+}
+function simulateTyping() {
+  const t = document.getElementById('typingIndicator')
+  t.style.display = 'flex'
+  setTimeout(() => {
+    t.style.display = 'none'
+    const wrap = document.createElement('div')
+    wrap.className = 'msg-wrap clearfix'
+    wrap.innerHTML = `<div class="msg-bubble msg-them">Just tried it — works perfectly! 🔐 <div class="msg-time">${new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})}</div></div>`
+    t.parentNode.insertBefore(wrap, t)
+    const rbar = document.createElement('div')
+    rbar.className = 'reactions-bar'
+    rbar.id = 'r_new'
+    t.parentNode.insertBefore(rbar, t)
+    lastTarget = 'r_new'
+  }, 2500)
+}
+
+// ── QR Code ───────────────────────────────────────────────────────────────────
+let qrInstance = null
+const DEFAULT_ADDR = 'NUBIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID'
+
+function initQR() {
+  if (qrInstance) return
+  const container = document.getElementById('qrcode')
+  container.innerHTML = ''
+  qrInstance = new QRCode(container, {
+    text: 'qubic-messenger://' + DEFAULT_ADDR,
+    width: 200, height: 200,
+    colorDark: '#6055ff', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H
+  })
+}
+
+function updateQR(val) {
+  if (!val.trim()) return
+  document.getElementById('qrAddrDisplay').textContent = val
+  const container = document.getElementById('qrcode')
+  container.innerHTML = ''
+  qrInstance = null
+  qrInstance = new QRCode(container, {
+    text: 'qubic-messenger://' + val,
+    width: 200, height: 200,
+    colorDark: '#6055ff', colorLight: '#ffffff',
+    correctLevel: QRCode.CorrectLevel.H
+  })
+}
+
+function copyAddr() {
+  const addr = document.getElementById('qrAddrDisplay').textContent
+  navigator.clipboard.writeText(addr).then(() => {
+    const btn = document.querySelector('.copy-btn')
+    btn.textContent = '✓ Copied!'
+    setTimeout(() => btn.textContent = 'Copy Address', 2000)
+  })
+}
+
+function downloadQR() {
+  const canvas = document.querySelector('#qrcode canvas')
+  if (!canvas) { alert('Generate QR first'); return }
+  const a = document.createElement('a')
+  a.download = 'qubic-messenger-address.png'
+  a.href = canvas.toDataURL()
+  a.click()
+}
+
+function shareAddr() {
+  const addr = document.getElementById('qrAddrDisplay').textContent
+  if (navigator.share) {
+    navigator.share({ title: 'My Qubic Messenger Address', text: `Message me on Qubic Messenger: ${addr}`, url: `https://nubi305.github.io/qubic-messenger` })
+  } else {
+    navigator.clipboard.writeText(`Message me on Qubic Messenger!\nAddress: ${addr}\nhttps://nubi305.github.io/qubic-messenger`)
+    alert('Share link copied to clipboard!')
+  }
+}
+
+// Auto-init QR on first tab
+</script>
+</body>
+</html>
