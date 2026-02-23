@@ -1,78 +1,56 @@
-# qubic-messenger
+# Qubic Messenger — P2P Relay
 
-A decentralized, end-to-end encrypted messaging app built on [Qubic](https://qubic.org) — feeless, pseudonymous, and fully open source.
+A lightweight libp2p relay + GossipSub node. Deploy on any cheap VPS.
 
-## Architecture
-
-```
-qubic-messenger/
-├── contract/          # Qubic smart contract (C++ / QPI)
-├── frontend/
-│   ├── web/           # Next.js web app
-│   └── mobile/        # React Native app (Expo)
-├── shared/            # Shared crypto, types, Qubic client logic (TypeScript)
-├── scripts/           # Deployment & dev utilities
-└── .github/workflows/ # CI/CD
-```
-
-## How it works
-
-1. **Register** — User registers a nickname + X25519 public key on-chain via smart contract.
-2. **Discover** — Look up any nickname to retrieve their public key.
-3. **Encrypt** — Client derives a shared secret (X25519 ECDH) and encrypts messages with XSalsa20-Poly1305 via libsodium.
-4. **Deliver** — Encrypted blob is sent peer-to-peer via libp2p/WebRTC. Never touches the server in plaintext.
-5. **Prove** — Optionally post a content hash + metadata to the contract for on-chain delivery proof.
-
-## Quick Start
-
-### Prerequisites
-
-- Node.js >= 18
-- pnpm >= 8
-- Qubic wallet seed (for contract interaction)
-- Expo CLI (for mobile)
-
-### Install
+## Deploy in 5 minutes (Ubuntu VPS)
 
 ```bash
-pnpm install
+# 1. SSH into your VPS
+ssh root@YOUR_VPS_IP
+
+# 2. Install Node 20
+curl -fsSL https://deb.nodesource.com/setup_20.x | sudo -E bash -
+sudo apt install -y nodejs
+
+# 3. Clone and install
+git clone https://github.com/Nubi305/qubic-messenger.git
+cd qubic-messenger/relay
+npm install
+
+# 4. Run it
+node relay.js
 ```
 
-### Web
+## Keep it running with PM2
 
 ```bash
-cd frontend/web
-pnpm dev
+npm install -g pm2
+pm2 start relay.js --name qubic-relay
+pm2 save
+pm2 startup   # follow the printed command to auto-start on reboot
 ```
 
-### Mobile
+## Open firewall ports
 
 ```bash
-cd frontend/mobile
-pnpm start
+# On your VPS (Ubuntu/ufw)
+ufw allow 4001/tcp   # libp2p TCP
+ufw allow 4002/tcp   # libp2p WebSockets
 ```
 
-### Smart Contract
+## Connect your frontend
 
-See [`contract/README.md`](contract/README.md) for compilation and deployment instructions.
+Copy the WebSocket multiaddr printed on startup into your frontend `.env.local`:
 
-## Security Model
+```
+NEXT_PUBLIC_RELAY_ADDR=/ip4/YOUR_VPS_IP/tcp/4002/ws/p2p/12D3KooW...
+```
 
-- **E2EE**: `crypto_box_easy` (X25519 + XSalsa20-Poly1305). Only sender and recipient can read messages.
-- **No plaintext on-chain**: Only BLAKE2b-256 hashes of encrypted blobs are posted.
-- **Anti-replay**: Strictly increasing nonces enforced in contract.
-- **Key storage**: Private keys wrapped with AES-GCM derived from user seed before IndexedDB storage.
-- **No phone/email**: Qubic wallet identity is your pseudonymous ID.
+## Recommended VPS providers
 
-## Roadmap
-
-- [x] MVP: Registration, lookup, P2P messaging, on-chain metadata
-- [ ] Double Ratchet (Signal Protocol) for forward secrecy
-- [ ] Group chats with shared symmetric keys
-- [ ] Voice/video note support (IPFS blob + CID delivery)
-- [ ] Offline inbox via IPFS pinning
-- [ ] Nickname staking / anti-spam market
-
-## License
-
-MIT
+| Provider    | Cheapest plan | Notes |
+|-------------|--------------|-------|
+| Hetzner     | €4/mo        | Best value, EU |
+| DigitalOcean| $6/mo        | Easy UI |
+| Vultr       | $6/mo        | Global locations |
+| Oracle Cloud| Free tier    | Always free ARM instance |
