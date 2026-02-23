@@ -1,0 +1,801 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qubic Messenger</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl-fast.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:ital,wght@0,400;0,700;1,400&family=Cabinet+Grotesk:wght@400;500;700;800;900&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --black:#04040a;
+  --deep:#08080f;
+  --card:#0f0f1a;
+  --border:#1e1e30;
+  --border2:#2d2d48;
+  --dim:#444466;
+  --mid:#8080aa;
+  --text:#ededf8;
+  --white:#ffffff;
+  --v:#6c63ff;
+  --v2:#9d97ff;
+  --teal:#00ffcc;
+  --rose:#ff4d7d;
+  --amber:#ffaa00;
+  --mono:'Space Mono',monospace;
+  --display:'Cabinet Grotesk',sans-serif;
+}
+html,body{height:100%;background:var(--black);color:var(--text);font-family:var(--display);overflow:hidden;cursor:none}
+
+/* ── Custom cursor ── */
+#cursor{position:fixed;width:12px;height:12px;background:var(--v);border-radius:50%;pointer-events:none;z-index:9999;transform:translate(-50%,-50%);transition:transform .1s,background .2s;mix-blend-mode:screen}
+#cursorRing{position:fixed;width:36px;height:36px;border:1px solid rgba(108,99,255,.4);border-radius:50%;pointer-events:none;z-index:9998;transform:translate(-50%,-50%);transition:transform .15s cubic-bezier(.25,.46,.45,.94)}
+
+/* ── Canvas background ── */
+#canvas{position:fixed;inset:0;z-index:0;opacity:.4}
+
+/* ══════════ SPLASH SCREEN ══════════ */
+#splash{
+  position:fixed;inset:0;z-index:100;
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  background:var(--black);
+}
+.splash-logo{
+  width:80px;height:80px;border-radius:24px;
+  background:linear-gradient(135deg,var(--v),var(--teal));
+  display:flex;align-items:center;justify-content:center;
+  font-size:36px;margin-bottom:28px;
+  box-shadow:0 0 60px rgba(108,99,255,.4),0 0 120px rgba(108,99,255,.1);
+  animation:logoPulse 2s ease infinite;
+}
+@keyframes logoPulse{0%,100%{box-shadow:0 0 60px rgba(108,99,255,.4)}50%{box-shadow:0 0 100px rgba(108,99,255,.7),0 0 200px rgba(0,255,204,.15)}}
+
+.splash-title{
+  font-size:14px;font-weight:700;letter-spacing:6px;text-transform:uppercase;
+  color:var(--dim);font-family:var(--mono);margin-bottom:48px;
+}
+
+/* Key generation terminal */
+.key-terminal{
+  width:480px;background:var(--card);border:1px solid var(--border);
+  border-radius:16px;overflow:hidden;
+  box-shadow:0 40px 80px rgba(0,0,0,.6);
+}
+.terminal-bar{
+  background:var(--deep);padding:12px 16px;
+  display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);
+}
+.t-dot{width:10px;height:10px;border-radius:50%}
+.terminal-body{padding:20px;font-family:var(--mono);font-size:11px;line-height:2;min-height:160px}
+.t-line{display:flex;gap:10px;align-items:flex-start;opacity:0;animation:fadeIn .3s forwards}
+.t-prompt{color:var(--v);flex-shrink:0}
+.t-cmd{color:var(--mid)}
+.t-out{color:var(--teal);word-break:break-all}
+.t-success{color:var(--teal);font-weight:700}
+.t-cursor{display:inline-block;width:8px;height:13px;background:var(--v);animation:blink .8s step-end infinite;vertical-align:text-bottom}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+@keyframes fadeIn{to{opacity:1}}
+
+.splash-progress{
+  width:480px;margin-top:24px;
+}
+.progress-bar{
+  height:2px;background:var(--border);border-radius:1px;overflow:hidden;
+}
+.progress-fill{
+  height:100%;background:linear-gradient(90deg,var(--v),var(--teal));
+  border-radius:1px;width:0%;transition:width .3s ease;
+}
+.progress-label{
+  display:flex;justify-content:space-between;margin-top:8px;
+  font-family:var(--mono);font-size:10px;color:var(--dim);
+}
+.enter-btn{
+  margin-top:32px;padding:14px 48px;
+  background:linear-gradient(135deg,var(--v),#9d97ff);
+  border:none;color:white;font-family:var(--display);font-weight:800;
+  font-size:16px;border-radius:14px;cursor:pointer;
+  opacity:0;transform:translateY(10px);transition:all .3s;
+  pointer-events:none;
+  box-shadow:0 0 40px rgba(108,99,255,.3);
+  letter-spacing:-.3px;
+}
+.enter-btn.ready{opacity:1;transform:translateY(0);pointer-events:all;cursor:pointer}
+.enter-btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 0 60px rgba(108,99,255,.5)}
+
+/* ══════════ MAIN APP ══════════ */
+#app{
+  position:fixed;inset:0;z-index:50;
+  display:flex;
+  opacity:0;pointer-events:none;
+  transition:opacity .8s ease;
+}
+#app.visible{opacity:1;pointer-events:all}
+
+/* Sidebar */
+#sb{
+  width:280px;min-width:280px;
+  background:rgba(8,8,15,.95);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  backdrop-filter:blur(20px);
+}
+.sb-top{padding:20px 16px 12px;display:flex;align-items:center;gap:10px}
+.sb-logo{width:34px;height:34px;border-radius:10px;background:linear-gradient(135deg,var(--v),var(--teal));display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0}
+.sb-name{font-weight:900;font-size:15px;letter-spacing:-.4px}
+.sb-enc{font-family:var(--mono);font-size:9px;color:var(--dim);margin-top:1px}
+.sb-new{margin-left:auto;width:30px;height:30px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--mid);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s}
+.sb-new:hover{background:var(--card);color:var(--text);border-color:var(--border2)}
+
+.sb-search{padding:0 12px 12px}
+.sb-search input{width:100%;padding:8px 12px;background:var(--card);border:1px solid var(--border);border-radius:10px;color:var(--text);font-family:var(--display);font-size:13px;outline:none}
+.sb-search input::placeholder{color:var(--dim)}
+.sb-search input:focus{border-color:var(--v)}
+
+.sb-label{padding:0 16px 8px;font-size:9px;font-weight:700;letter-spacing:3px;color:var(--dim);text-transform:uppercase;font-family:var(--mono)}
+#convs{flex:1;overflow-y:auto;padding:0 6px}
+#convs::-webkit-scrollbar{width:3px}
+#convs::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+.conv{display:flex;align-items:center;gap:10px;padding:10px;border-radius:12px;cursor:pointer;transition:background .1s;margin-bottom:1px;position:relative}
+.conv:hover{background:rgba(108,99,255,.06)}
+.conv.on{background:rgba(108,99,255,.1)}
+.conv.on::before{content:'';position:absolute;left:0;top:20%;height:60%;width:3px;background:var(--v);border-radius:0 3px 3px 0}
+.av{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;flex-shrink:0;position:relative}
+.odot{position:absolute;bottom:1px;right:1px;width:9px;height:9px;border-radius:50%;background:var(--teal);border:2px solid var(--deep)}
+.ci{flex:1;min-width:0}
+.cn{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cp{font-size:11px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.cm{display:flex;flex-direction:column;align-items:flex-end;gap:3px;flex-shrink:0}
+.ct{font-family:var(--mono);font-size:9px;color:var(--dim)}
+.ub{background:var(--v);color:white;border-radius:6px;padding:1px 6px;font-size:9px;font-weight:700}
+.sb-foot{padding:12px 16px;border-top:1px solid var(--border);font-family:var(--mono);font-size:9px;color:var(--teal);display:flex;align-items:center;gap:6px}
+
+/* Chat area */
+#chat{flex:1;display:flex;flex-direction:column;overflow:hidden;background:var(--black);background-image:radial-gradient(ellipse at 30% 20%,rgba(108,99,255,.04) 0%,transparent 60%),radial-gradient(ellipse at 70% 80%,rgba(0,255,204,.02) 0%,transparent 60%)}
+
+.ch{padding:14px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;background:rgba(8,8,15,.8);backdrop-filter:blur(20px)}
+.ch-av{width:38px;height:38px;border-radius:11px;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px;flex-shrink:0}
+.ch-name{font-weight:800;font-size:15px;letter-spacing:-.3px}
+.ch-status{font-family:var(--mono);font-size:10px;color:var(--teal);margin-top:1px}
+.ch-acts{margin-left:auto;display:flex;gap:6px}
+.ch-btn{width:32px;height:32px;border-radius:9px;border:1px solid var(--border);background:transparent;color:var(--mid);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:14px;transition:all .15s}
+.ch-btn:hover{background:var(--card);color:var(--text)}
+
+#msgs{flex:1;overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:3px}
+#msgs::-webkit-scrollbar{width:3px}
+#msgs::-webkit-scrollbar-thumb{background:var(--border2);border-radius:3px}
+
+.day-sep{text-align:center;margin:10px 0}
+.day-sep span{background:var(--card);border:1px solid var(--border);padding:3px 12px;border-radius:20px;font-family:var(--mono);font-size:10px;color:var(--dim)}
+.mrow{display:flex;align-items:flex-end;gap:7px;animation:msgIn .25s ease}
+.mrow.me{flex-direction:row-reverse}
+@keyframes msgIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.mav{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;flex-shrink:0}
+.mav.sp{visibility:hidden}
+.bub{max-width:65%;padding:9px 14px;border-radius:17px;font-size:13.5px;line-height:1.55;word-break:break-word}
+.bub.me{background:linear-gradient(135deg,#5a52ee,var(--v));color:white;border-bottom-right-radius:4px}
+.bub.them{background:var(--card);border:1px solid var(--border);border-bottom-left-radius:4px}
+.bmeta{display:flex;align-items:center;gap:5px;margin-top:3px;justify-content:flex-end}
+.btime{font-family:var(--mono);font-size:9px;opacity:.5}
+.btick{font-size:10px;color:var(--teal)}
+.rxns{display:flex;gap:3px;flex-wrap:wrap;margin-top:3px;padding-left:33px}
+.rxns.me{padding-left:0;justify-content:flex-end}
+.rxn{background:var(--card);border:1px solid var(--border);border-radius:20px;padding:2px 8px;font-size:11px;cursor:pointer;transition:all .1s;display:flex;align-items:center;gap:3px}
+.rxn:hover{border-color:var(--v);background:rgba(108,99,255,.1)}
+.rxn span{font-family:var(--mono);font-size:9px;color:var(--mid)}
+.typing-r{display:flex;align-items:center;gap:8px;padding:3px 0 6px;animation:msgIn .2s ease}
+.typing-b{background:var(--card);border:1px solid var(--border);border-radius:17px;border-bottom-left-radius:4px;padding:10px 14px;display:flex;gap:4px;align-items:center}
+.d{width:5px;height:5px;background:var(--mid);border-radius:50%;animation:tp 1.4s infinite}
+.d:nth-child(2){animation-delay:.2s}.d:nth-child(3){animation-delay:.4s}
+@keyframes tp{0%,60%,100%{opacity:.3;transform:scale(1)}30%{opacity:1;transform:scale(1.4)}}
+
+/* Encryption flash */
+.enc-flash{
+  position:absolute;bottom:80px;left:50%;transform:translateX(-50%);
+  background:rgba(0,255,204,.08);border:1px solid rgba(0,255,204,.2);
+  border-radius:10px;padding:8px 16px;font-family:var(--mono);font-size:10px;
+  color:var(--teal);white-space:nowrap;opacity:0;transition:opacity .2s;
+  pointer-events:none;z-index:10;
+}
+.enc-flash.show{opacity:1}
+
+/* Input */
+.inp-area{padding:14px 20px 18px;background:rgba(8,8,15,.8);border-top:1px solid var(--border);backdrop-filter:blur(20px);position:relative}
+.inp-row{display:flex;align-items:flex-end;gap:8px}
+.inp-wrap{flex:1;background:var(--card);border:1px solid var(--border);border-radius:15px;padding:9px 12px;display:flex;align-items:flex-end;gap:8px;transition:border-color .15s}
+.inp-wrap:focus-within{border-color:var(--v)}
+#mi{flex:1;background:transparent;border:none;outline:none;color:var(--text);font-family:var(--display);font-size:13.5px;resize:none;max-height:100px;line-height:1.5}
+#mi::placeholder{color:var(--dim)}
+.ep-tog{color:var(--dim);cursor:pointer;font-size:17px;transition:color .1s;flex-shrink:0}
+.ep-tog:hover{color:var(--amber)}
+.send{width:40px;height:40px;border-radius:12px;background:linear-gradient(135deg,#5a52ee,var(--v));border:none;color:white;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:17px;transition:all .15s;flex-shrink:0;box-shadow:0 4px 15px rgba(108,99,255,.3)}
+.send:hover{transform:scale(1.06);filter:brightness(1.15)}
+.inp-hint{text-align:center;margin-top:7px;font-family:var(--mono);font-size:9px;color:var(--dim)}
+
+/* Emoji picker */
+.ep{position:absolute;bottom:78px;left:20px;background:var(--card);border:1px solid var(--border);border-radius:14px;padding:10px;display:none;flex-wrap:wrap;gap:4px;max-width:260px;box-shadow:0 20px 40px rgba(0,0,0,.5);z-index:20}
+.ep.open{display:flex}
+.ee{font-size:20px;cursor:pointer;padding:4px;border-radius:7px;transition:background .1s}
+.ee:hover{background:var(--border)}
+
+/* Welcome */
+#wlc{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px}
+.wlc-icon{font-size:52px;margin-bottom:4px}
+.wlc-t{font-weight:900;font-size:22px;letter-spacing:-.5px}
+.wlc-s{color:var(--mid);font-size:13px;text-align:center;max-width:300px;line-height:1.6}
+.wlc-btn{margin-top:8px;padding:12px 28px;background:linear-gradient(135deg,#5a52ee,var(--v));border:none;color:white;border-radius:13px;font-family:var(--display);font-weight:800;font-size:14px;cursor:pointer;transition:all .15s;letter-spacing:-.2px}
+.wlc-btn:hover{transform:translateY(-2px);filter:brightness(1.1)}
+
+/* Ciphertext panel */
+#cipherPanel{
+  width:260px;min-width:260px;
+  background:rgba(4,4,10,.97);border-left:1px solid var(--border);
+  display:none;flex-direction:column;overflow:hidden;
+  backdrop-filter:blur(20px);
+}
+#cipherPanel.open{display:flex}
+.cp-head{padding:16px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center}
+.cp-title{font-family:var(--mono);font-size:11px;color:var(--teal);font-weight:700;letter-spacing:1px}
+.cp-close{background:transparent;border:none;color:var(--dim);cursor:pointer;font-size:16px;line-height:1}
+#cpLog{flex:1;overflow-y:auto;padding:12px;font-family:var(--mono);font-size:9px;line-height:1.9}
+#cpLog::-webkit-scrollbar{width:2px}
+#cpLog::-webkit-scrollbar-thumb{background:var(--border2)}
+.cpl-label{color:var(--dim);text-transform:uppercase;letter-spacing:2px;font-size:8px;margin-top:10px;margin-bottom:2px}
+.cpl-hex{color:var(--v2);word-break:break-all}
+.cpl-plain{color:var(--teal)}
+.cpl-arrow{color:var(--dim);margin:4px 0}
+
+/* Modal */
+.modal-back{position:fixed;inset:0;background:rgba(0,0,0,.7);backdrop-filter:blur(8px);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-back.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--border);border-radius:22px;padding:26px;width:400px;box-shadow:0 40px 80px rgba(0,0,0,.7);animation:mIn .2s ease}
+@keyframes mIn{from{transform:translateY(16px);opacity:0}to{transform:translateY(0);opacity:1}}
+.mt{font-weight:900;font-size:19px;letter-spacing:-.4px;margin-bottom:6px}
+.ms{color:var(--mid);font-size:12px;margin-bottom:20px;line-height:1.6}
+.mi{width:100%;padding:11px 14px;background:var(--deep);border:1px solid var(--border);border-radius:11px;color:var(--text);font-family:var(--mono);font-size:11px;outline:none;margin-bottom:10px;transition:border-color .15s}
+.mi:focus{border-color:var(--v)}
+.mi::placeholder{font-family:var(--display);font-size:12px;color:var(--dim)}
+.mr{display:flex;gap:8px}
+.mb{flex:1;padding:11px;border-radius:11px;border:1px solid var(--border);background:var(--deep);color:var(--mid);font-family:var(--display);font-weight:700;font-size:13px;cursor:pointer;transition:all .15s}
+.mb:hover{color:var(--text);border-color:var(--border2)}
+.mb.p{background:linear-gradient(135deg,#5a52ee,var(--v));border-color:transparent;color:white}
+.mb.p:hover{filter:brightness(1.1)}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--card);border:1px solid var(--border);border-radius:12px;padding:10px 16px;display:flex;align-items:center;gap:9px;box-shadow:0 10px 30px rgba(0,0,0,.5);z-index:500;transform:translateY(20px);opacity:0;transition:all .3s;pointer-events:none;font-size:12px}
+.toast.show{transform:translateY(0);opacity:1}
+</style>
+</head>
+<body>
+
+<canvas id="canvas"></canvas>
+<div id="cursor"></div>
+<div id="cursorRing"></div>
+
+<!-- ══════ SPLASH ══════ -->
+<div id="splash">
+  <div class="splash-logo">🔐</div>
+  <div class="splash-title">Qubic Messenger</div>
+
+  <div class="key-terminal">
+    <div class="terminal-bar">
+      <div class="t-dot" style="background:#ff5f57"></div>
+      <div class="t-dot" style="background:#febc2e"></div>
+      <div class="t-dot" style="background:#28c840"></div>
+      <span style="margin-left:8px;font-family:var(--mono);font-size:10px;color:var(--dim)">qubic-messenger — keygen</span>
+    </div>
+    <div class="terminal-body" id="termBody">
+      <div style="font-family:var(--mono);font-size:11px;color:var(--dim)">$ <span class="t-cursor"></span></div>
+    </div>
+  </div>
+
+  <div class="splash-progress">
+    <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+    <div class="progress-label">
+      <span id="progressLabel">Initializing…</span>
+      <span id="progressPct">0%</span>
+    </div>
+  </div>
+
+  <button class="enter-btn" id="enterBtn" onclick="enterApp()">Enter Messenger →</button>
+</div>
+
+<!-- ══════ APP ══════ -->
+<div id="app">
+  <div id="sb">
+    <div class="sb-top">
+      <div class="sb-logo">🔐</div>
+      <div>
+        <div class="sb-name">Qubic Messenger</div>
+        <div class="sb-enc">x25519 · xsalsa20-poly1305</div>
+      </div>
+      <button class="sb-new" onclick="openModal()">✏</button>
+    </div>
+    <div class="sb-search"><input placeholder="Search…" oninput="filterC(this.value)"></div>
+    <div class="sb-label">Conversations</div>
+    <div id="convs"></div>
+    <div class="sb-foot">🔒 all messages encrypted</div>
+  </div>
+
+  <div id="chat">
+    <div id="wlc">
+      <div class="wlc-icon">🔐</div>
+      <div class="wlc-t">Private by default</div>
+      <div class="wlc-s">Every message uses X25519 key exchange + XSalsa20-Poly1305 encryption. Nobody can read them.</div>
+      <button class="wlc-btn" onclick="openModal()">+ New Encrypted Message</button>
+    </div>
+
+    <div id="cv" style="display:none;flex-direction:column;height:100%;position:relative">
+      <div class="ch">
+        <div class="ch-av" id="chAv"></div>
+        <div>
+          <div class="ch-name" id="chName"></div>
+          <div class="ch-status">🔒 End-to-end encrypted · X25519</div>
+        </div>
+        <div class="ch-acts">
+          <button class="ch-btn" onclick="toggleCipher()" title="Live encryption log">⚡</button>
+          <button class="ch-btn" onclick="simTyping()" title="Simulate reply">💬</button>
+        </div>
+      </div>
+      <div id="msgs"></div>
+      <div class="enc-flash" id="encFlash"></div>
+      <div class="ep" id="ep">
+        <span class="ee" onclick="ins('👍')">👍</span><span class="ee" onclick="ins('❤️')">❤️</span>
+        <span class="ee" onclick="ins('🔥')">🔥</span><span class="ee" onclick="ins('🚀')">🚀</span>
+        <span class="ee" onclick="ins('😂')">😂</span><span class="ee" onclick="ins('💎')">💎</span>
+        <span class="ee" onclick="ins('⚡')">⚡</span><span class="ee" onclick="ins('🔐')">🔐</span>
+        <span class="ee" onclick="ins('🙏')">🙏</span><span class="ee" onclick="ins('🎉')">🎉</span>
+      </div>
+      <div class="inp-area">
+        <div class="inp-row">
+          <div class="inp-wrap">
+            <textarea id="mi" placeholder="Message…" rows="1" onkeydown="hk(event)" oninput="ar(this)"></textarea>
+            <span class="ep-tog" onclick="toggleEp()">😊</span>
+          </div>
+          <button class="send" onclick="send()">↑</button>
+        </div>
+        <div class="inp-hint">🔒 encrypted before sending · delivered via qubic p2p</div>
+      </div>
+    </div>
+  </div>
+
+  <div id="cipherPanel">
+    <div class="cp-head">
+      <div class="cp-title">⚡ LIVE CRYPTO LOG</div>
+      <button class="cp-close" onclick="toggleCipher()">✕</button>
+    </div>
+    <div id="cpLog"><div style="color:var(--dim);font-size:9px;padding:4px">Send a message to see live encryption…</div></div>
+  </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-back" id="modal">
+  <div class="modal">
+    <div class="mt">New Encrypted Conversation</div>
+    <div class="ms">Enter a Qubic address. A shared key will be derived via X25519 ECDH automatically.</div>
+    <input class="mi" id="mAddr" placeholder="Qubic address or nickname…">
+    <input class="mi" id="mNick" placeholder="Nickname (optional)">
+    <div class="mr">
+      <button class="mb" onclick="closeModal()">Cancel</button>
+      <button class="mb p" onclick="startConv()">Start Chat 🔐</button>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span id="ti"></span><span id="tt" style="font-family:var(--display)"></span></div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// PARTICLE CANVAS BG
+// ══════════════════════════════════════════════════════════════════
+const canvas = document.getElementById('canvas')
+const ctx    = canvas.getContext('2d')
+let W, H, particles = []
+
+function resize() {
+  W = canvas.width  = window.innerWidth
+  H = canvas.height = window.innerHeight
+}
+resize()
+window.addEventListener('resize', resize)
+
+class Particle {
+  constructor() { this.reset() }
+  reset() {
+    this.x  = Math.random() * W
+    this.y  = Math.random() * H
+    this.vx = (Math.random() - .5) * .3
+    this.vy = (Math.random() - .5) * .3
+    this.r  = Math.random() * 1.5 + .5
+    this.a  = Math.random() * .6 + .1
+    this.c  = Math.random() > .6 ? '#6c63ff' : '#00ffcc'
+  }
+  update() {
+    this.x += this.vx; this.y += this.vy
+    if (this.x < 0 || this.x > W || this.y < 0 || this.y > H) this.reset()
+  }
+  draw() {
+    ctx.beginPath(); ctx.arc(this.x, this.y, this.r, 0, Math.PI*2)
+    ctx.fillStyle = this.c + Math.floor(this.a * 255).toString(16).padStart(2,'0')
+    ctx.fill()
+  }
+}
+
+for (let i = 0; i < 120; i++) particles.push(new Particle())
+
+function animBg() {
+  ctx.clearRect(0, 0, W, H)
+  // Draw connections
+  for (let i = 0; i < particles.length; i++) {
+    for (let j = i+1; j < particles.length; j++) {
+      const dx = particles[i].x - particles[j].x
+      const dy = particles[i].y - particles[j].y
+      const d  = Math.sqrt(dx*dx + dy*dy)
+      if (d < 80) {
+        ctx.beginPath()
+        ctx.moveTo(particles[i].x, particles[i].y)
+        ctx.lineTo(particles[j].x, particles[j].y)
+        ctx.strokeStyle = `rgba(108,99,255,${(1-d/80)*.1})`
+        ctx.lineWidth = .5
+        ctx.stroke()
+      }
+    }
+  }
+  particles.forEach(p => { p.update(); p.draw() })
+  requestAnimationFrame(animBg)
+}
+animBg()
+
+// ══════════════════════════════════════════════════════════════════
+// CUSTOM CURSOR
+// ══════════════════════════════════════════════════════════════════
+const cur  = document.getElementById('cursor')
+const ring = document.getElementById('cursorRing')
+let mx = 0, my = 0, rx = 0, ry = 0
+
+document.addEventListener('mousemove', e => {
+  mx = e.clientX; my = e.clientY
+  cur.style.left = mx + 'px'; cur.style.top = my + 'px'
+})
+
+function animCursor() {
+  rx += (mx - rx) * .12; ry += (my - ry) * .12
+  ring.style.left = rx + 'px'; ring.style.top = ry + 'px'
+  requestAnimationFrame(animCursor)
+}
+animCursor()
+
+document.querySelectorAll('button,input,textarea,.conv,.ee,.rxn').forEach(el => {
+  el.addEventListener('mouseenter', () => {
+    cur.style.transform = 'translate(-50%,-50%) scale(2)'
+    ring.style.transform = 'translate(-50%,-50%) scale(1.5)'
+  })
+  el.addEventListener('mouseleave', () => {
+    cur.style.transform = 'translate(-50%,-50%) scale(1)'
+    ring.style.transform = 'translate(-50%,-50%) scale(1)'
+  })
+})
+
+// ══════════════════════════════════════════════════════════════════
+// SPLASH TERMINAL ANIMATION
+// ══════════════════════════════════════════════════════════════════
+const nacl = window.nacl
+const ME_KP = nacl.box.keyPair()
+const ME_ADDR = 'NUBI305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID'
+
+function u8h(u8, n=32) { return Array.from(u8.slice(0,n)).map(b=>b.toString(16).padStart(2,'0')).join('') }
+
+const termSteps = [
+  { cmd: 'qubic-messenger init', delay: 600 },
+  { out: `Generating X25519 keypair…`, delay: 400, color: '#8080aa' },
+  { out: `privkey: ${u8h(ME_KP.secretKey,16)}…`, delay: 300, color: '#444466' },
+  { out: `pubkey:  ${u8h(ME_KP.publicKey,16)}…`, delay: 300, color: '#6c63ff' },
+  { cmd: 'qubic-keyreg --address ' + ME_ADDR.slice(0,20) + '…', delay: 600 },
+  { out: `Registering public key on-chain…`, delay: 500, color: '#8080aa' },
+  { out: `tx hash: ${u8h(nacl.randomBytes(16))}`, delay: 400, color: '#444466' },
+  { out: `✓ Key registered at tick 18420291`, delay: 300, color: '#00ffcc' },
+  { cmd: 'qubic-messenger start', delay: 600 },
+  { out: `P2P relay connected · gossipsub ready`, delay: 400, color: '#8080aa' },
+  { out: `IPFS inbox initialized · CID ready`, delay: 300, color: '#8080aa' },
+  { out: `✓ Ready to send encrypted messages`, delay: 300, color: '#00ffcc' },
+]
+
+const progressSteps = [
+  { label: 'Generating keypair…', pct: 20 },
+  { label: 'Deriving shared secrets…', pct: 40 },
+  { label: 'Registering on-chain…', pct: 60 },
+  { label: 'Connecting P2P relay…', pct: 80 },
+  { label: 'Ready!', pct: 100 },
+]
+
+let stepI = 0, progI = 0
+const termBody = document.getElementById('termBody')
+
+function addTermLine(content, color = '#ededf8', isCmd = false) {
+  const div = document.createElement('div')
+  div.className = 't-line'
+  div.style.animationDelay = '0s'
+  if (isCmd) {
+    div.innerHTML = `<span style="color:#6c63ff;flex-shrink:0">$</span><span style="color:#8080aa"> ${content}</span>`
+  } else {
+    div.innerHTML = `<span style="color:${color};word-break:break-all">${content}</span>`
+  }
+  // Remove cursor line, add new, re-add cursor
+  const cursor = termBody.querySelector('.t-cursor')?.closest('div')
+  if (cursor) cursor.remove()
+  termBody.appendChild(div)
+  const cur = document.createElement('div')
+  cur.innerHTML = `<span style="color:#444466">$ </span><span class="t-cursor"></span>`
+  cur.style.fontFamily = 'var(--mono)'
+  cur.style.fontSize = '11px'
+  termBody.appendChild(cur)
+  termBody.scrollTop = termBody.scrollHeight
+}
+
+function runTerminal() {
+  if (stepI >= termSteps.length) {
+    setTimeout(() => document.getElementById('enterBtn').classList.add('ready'), 400)
+    return
+  }
+  const step = termSteps[stepI++]
+  setTimeout(() => {
+    if (step.cmd !== undefined) addTermLine(step.cmd, '', true)
+    else addTermLine(step.out, step.color || '#ededf8')
+    // Update progress
+    if (progI < progressSteps.length) {
+      const p = progressSteps[progI++]
+      document.getElementById('progressFill').style.width = p.pct + '%'
+      document.getElementById('progressLabel').textContent = p.label
+      document.getElementById('progressPct').textContent = p.pct + '%'
+    }
+    runTerminal()
+  }, step.delay)
+}
+
+setTimeout(runTerminal, 800)
+
+// ══════════════════════════════════════════════════════════════════
+// ENTER APP
+// ══════════════════════════════════════════════════════════════════
+function enterApp() {
+  const splash = document.getElementById('splash')
+  const app    = document.getElementById('app')
+  splash.style.transition = 'opacity .7s ease'
+  splash.style.opacity = '0'
+  setTimeout(() => { splash.style.display = 'none'; app.classList.add('visible') }, 700)
+  initApp()
+}
+
+// ══════════════════════════════════════════════════════════════════
+// APP STATE
+// ══════════════════════════════════════════════════════════════════
+const CONTACTS = [
+  { address:'ALICEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID', nickname:'Alice', color:'#6c63ff', kp: nacl.box.keyPair() },
+  { address:'BOBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID', nickname:'Bob',   color:'#00ffcc', kp: nacl.box.keyPair() },
+  { address:'CAROLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID',  nickname:'Carol', color:'#ff4d7d', kp: nacl.box.keyPair() },
+]
+let convs = {}, active = null
+
+function enc(text, theirPub, myPriv) {
+  const n = nacl.randomBytes(nacl.box.nonceLength)
+  const c = nacl.box(new TextEncoder().encode(text), n, theirPub, myPriv)
+  return { n, c }
+}
+
+function initApp() {
+  CONTACTS.forEach(co => { convs[co.address] = { contact: co, messages: [], unread: 0 } })
+  const alice = convs[CONTACTS[0].address]
+  const seed  = [
+    { from:'them', text:'Hey! Just set up Qubic Messenger 🔐', time:'09:14', rxns:{'🔥':2} },
+    { from:'me',   text:'Finally — zero fees and real E2EE. This is it.', time:'09:15', rxns:{} },
+    { from:'them', text:'Nobody can read these, not even the devs', time:'09:15', rxns:{'💎':1,'🚀':3} },
+    { from:'me',   text:'X25519 key exchange — proper crypto 🔑', time:'09:16', rxns:{} },
+    { from:'them', text:'Click ⚡ to see the live encryption log!', time:'09:17', rxns:{'👍':1} },
+  ]
+  seed.forEach(m => {
+    const isMe = m.from === 'me'
+    const e    = enc(m.text, isMe ? CONTACTS[0].kp.publicKey : ME_KP.publicKey, isMe ? ME_KP.secretKey : CONTACTS[0].kp.secretKey)
+    alice.messages.push({ id:Math.random().toString(36).slice(2), from: isMe ? ME_ADDR : CONTACTS[0].address, text:m.text, e, time:m.time, read:true, rxns:m.rxns })
+  })
+  const bob = convs[CONTACTS[1].address]
+  const be  = enc('Tried it — insane speed ⚡', ME_KP.publicKey, CONTACTS[1].kp.secretKey)
+  bob.messages.push({ id:Math.random().toString(36).slice(2), from:CONTACTS[1].address, text:'Tried it — insane speed ⚡', e:be, time:'11:02', read:false, rxns:{} })
+  bob.unread = 1
+  renderSB()
+  setTimeout(() => openConv(CONTACTS[0].address), 200)
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════════════════
+function renderSB() {
+  document.getElementById('convs').innerHTML = Object.values(convs).map(cv => {
+    const c = cv.contact, last = cv.messages[cv.messages.length-1]
+    const online = c.nickname === 'Alice' || c.nickname === 'Bob'
+    return `<div class="conv ${active===c.address?'on':''}" onclick="openConv('${c.address}')">
+      <div class="av" style="background:${c.color}18;color:${c.color}">${c.nickname[0]}${online?'<div class="odot"></div>':''}
+      </div>
+      <div class="ci">
+        <div class="cn">${c.nickname}</div>
+        <div class="cp">🔒 ${last?last.text.slice(0,28)+(last.text.length>28?'…':''):'No messages'}</div>
+      </div>
+      <div class="cm">
+        <span class="ct">${last?last.time:''}</span>
+        ${cv.unread>0?`<span class="ub">${cv.unread}</span>`:''}
+      </div>
+    </div>`
+  }).join('')
+}
+
+function renderMsgs() {
+  if (!active) return
+  const cv = convs[active], el = document.getElementById('msgs')
+  el.innerHTML = '<div class="day-sep"><span>Today</span></div>'
+  cv.messages.forEach((msg, i) => {
+    const isMe = msg.from === ME_ADDR
+    const next = cv.messages[i+1]
+    const showAv = !next || next.from !== msg.from
+    const rxns = Object.entries(msg.rxns||{}).map(([e,n]) =>
+      `<span class="rxn" onclick="toggleRxn('${active}',${i},'${e}')">${e} <span>${n}</span></span>`).join('')
+    el.innerHTML += `<div class="mrow ${isMe?'me':''}">
+      ${!isMe?`<div class="mav ${showAv?'':'sp'}" style="background:${cv.contact.color}18;color:${cv.contact.color}">${cv.contact.nickname[0]}</div>`:''}
+      <div>
+        <div class="bub ${isMe?'me':'them'}">${msg.text}
+          <div class="bmeta"><span class="btime">${msg.time}</span>${isMe?`<span class="btick">${msg.read?'✓✓':'✓'}</span>`:''}</div>
+        </div>
+        ${rxns?`<div class="rxns ${isMe?'me':''}">${rxns}</div>`:''}
+      </div>
+      ${isMe?`<div class="mav ${showAv?'':'sp'}" style="background:#6c63ff18;color:#6c63ff">Y</div>`:''}
+    </div>`
+  })
+  el.scrollTop = el.scrollHeight
+}
+
+function openConv(addr) {
+  active = addr
+  const cv = convs[addr]
+  cv.unread = 0; cv.messages.forEach(m => m.read = true)
+  document.getElementById('wlc').style.display  = 'none'
+  document.getElementById('cv').style.display   = 'flex'
+  const c = cv.contact
+  document.getElementById('chAv').innerHTML = `<div style="width:38px;height:38px;border-radius:11px;background:${c.color}18;color:${c.color};display:flex;align-items:center;justify-content:center;font-weight:900;font-size:14px">${c.nickname[0]}</div>`
+  document.getElementById('chName').textContent = c.nickname
+  renderMsgs(); renderSB()
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MESSAGING
+// ══════════════════════════════════════════════════════════════════
+function send() {
+  const input = document.getElementById('mi'), text = input.value.trim()
+  if (!text || !active) return
+  const cv  = convs[active], c = cv.contact
+  const enc = { n: nacl.randomBytes(nacl.box.nonceLength), c: null }
+  enc.c = nacl.box(new TextEncoder().encode(text), enc.n, c.kp.publicKey, ME_KP.secretKey)
+  const now = new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})
+  cv.messages.push({ id:Math.random().toString(36).slice(2), from:ME_ADDR, text, e:enc, time:now, read:false, rxns:{} })
+  input.value = ''; input.style.height = 'auto'
+  renderMsgs(); renderSB()
+
+  // Show encryption flash
+  showFlash(`🔒 Encrypted: ${u8h(enc.c,8)}…`)
+
+  // Log to cipher panel
+  logCipher(text, enc)
+
+  // Mark read
+  setTimeout(() => { cv.messages[cv.messages.length-1].read = true; renderMsgs() }, 1500)
+
+  // Auto reply
+  const replies = ['Got it! 🔐','Perfect ⚡','Received and decrypted 💎','Love the zero fees 🔥','Real E2EE — incredible 🚀','Reading now…','On it!']
+  setTimeout(() => {
+    showTyping()
+    setTimeout(() => {
+      hideTyping()
+      const r = replies[Math.floor(Math.random()*replies.length)]
+      const re = enc2(r, c)
+      const n2 = new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'})
+      cv.messages.push({ id:Math.random().toString(36).slice(2), from:c.address, text:r, e:re, time:n2, read:true, rxns:{} })
+      renderMsgs(); renderSB()
+      logCipher(r, re, false)
+    }, 1800)
+  }, 2000+Math.random()*1000)
+}
+
+function enc2(text, contact) {
+  const n = nacl.randomBytes(nacl.box.nonceLength)
+  const c = nacl.box(new TextEncoder().encode(text), n, ME_KP.publicKey, contact.kp.secretKey)
+  return { n, c }
+}
+
+function showFlash(msg) {
+  const f = document.getElementById('encFlash')
+  f.textContent = msg; f.classList.add('show')
+  setTimeout(() => f.classList.remove('show'), 2000)
+}
+
+function showTyping() {
+  const el = document.getElementById('msgs')
+  if (document.getElementById('typRow')) return
+  const c = convs[active]?.contact
+  const d = document.createElement('div')
+  d.className = 'typing-r'; d.id = 'typRow'
+  d.innerHTML = `<div class="mav" style="background:${c?.color}18;color:${c?.color}">${c?.nickname[0]}</div><div class="typing-b"><div class="d"></div><div class="d"></div><div class="d"></div></div>`
+  el.appendChild(d); el.scrollTop = el.scrollHeight
+}
+function hideTyping() { document.getElementById('typRow')?.remove() }
+function simTyping() { if(!active)return; showTyping(); setTimeout(()=>{hideTyping();const phrases=['Try typing a message!','Encryption is real — click ⚡','X25519 works perfectly 🔐'];const cv=convs[active];const r=phrases[Math.floor(Math.random()*phrases.length)];const re=enc2(r,cv.contact);const n2=new Date().toLocaleTimeString('en',{hour:'2-digit',minute:'2-digit'});cv.messages.push({id:Math.random().toString(36).slice(2),from:cv.contact.address,text:r,e:re,time:n2,read:true,rxns:{}});renderMsgs();renderSB()},2000) }
+
+function hk(e) { if(e.key==='Enter'&&!e.shiftKey){e.preventDefault();send()} }
+function ar(el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,100)+'px' }
+
+// ══════════════════════════════════════════════════════════════════
+// CIPHER LOG
+// ══════════════════════════════════════════════════════════════════
+function logCipher(plaintext, enc, sending=true) {
+  const log = document.getElementById('cpLog')
+  log.innerHTML += `
+    <div class="cpl-label">${sending?'⬆ OUTBOUND':'⬇ INBOUND'} · ${new Date().toLocaleTimeString()}</div>
+    <div class="cpl-plain">plain: "${plaintext.slice(0,30)}${plaintext.length>30?'…':''}"</div>
+    <div class="cpl-arrow">↓ X25519 ECDH + XSalsa20-Poly1305</div>
+    <div class="cpl-label">nonce (24b)</div>
+    <div class="cpl-hex">${u8h(enc.n,24)}</div>
+    <div class="cpl-label">ciphertext (${enc.c?.length||'?'}b)</div>
+    <div class="cpl-hex">${u8h(enc.c||new Uint8Array(16),16)}…</div>
+  `
+  log.scrollTop = log.scrollHeight
+}
+
+function toggleCipher() { document.getElementById('cipherPanel').classList.toggle('open') }
+
+// ══════════════════════════════════════════════════════════════════
+// REACTIONS
+// ══════════════════════════════════════════════════════════════════
+function toggleRxn(addr, idx, emoji) {
+  const msg = convs[addr].messages[idx]
+  msg.rxns[emoji] = (msg.rxns[emoji]||0) + 1
+  if (msg.rxns[emoji] > 5) delete msg.rxns[emoji]
+  renderMsgs()
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EMOJI
+// ══════════════════════════════════════════════════════════════════
+function toggleEp() { document.getElementById('ep').classList.toggle('open') }
+function ins(e) { document.getElementById('mi').value += e; document.getElementById('ep').classList.remove('open'); document.getElementById('mi').focus() }
+document.addEventListener('click', e => { if(!e.target.closest('#ep')&&!e.target.closest('.ep-tog')) document.getElementById('ep').classList.remove('open') })
+
+// ══════════════════════════════════════════════════════════════════
+// MODAL
+// ══════════════════════════════════════════════════════════════════
+function openModal() { document.getElementById('modal').classList.add('open'); setTimeout(()=>document.getElementById('mAddr').focus(),100) }
+function closeModal() { document.getElementById('modal').classList.remove('open'); document.getElementById('mAddr').value=''; document.getElementById('mNick').value='' }
+function startConv() {
+  const addr = document.getElementById('mAddr').value.trim()
+  const nick = document.getElementById('mNick').value.trim() || addr.slice(0,8)+'…'
+  if (!addr) { toast('⚠️','Enter an address'); return }
+  const colors = ['#a78bfa','#34d399','#fb7185','#fbbf24','#60a5fa']
+  const c = { address:addr, nickname:nick, color:colors[Math.floor(Math.random()*colors.length)], kp:nacl.box.keyPair() }
+  convs[addr] = { contact:c, messages:[], unread:0 }
+  closeModal(); openConv(addr); renderSB()
+  toast('🔐','New encrypted conversation started')
+}
+
+// ══════════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════════
+function filterC(q) { document.querySelectorAll('.conv').forEach(el=>{ el.style.display=el.querySelector('.cn').textContent.toLowerCase().includes(q.toLowerCase())?'':'none' }) }
+
+let tt
+function toast(icon, text) {
+  document.getElementById('ti').textContent = icon
+  document.getElementById('tt').textContent = text
+  document.getElementById('toast').classList.add('show')
+  clearTimeout(tt); tt = setTimeout(()=>document.getElementById('toast').classList.remove('show'), 2800)
+}
+</script>
+</body>
+</html>
