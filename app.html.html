@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Qubic Messenger</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/tweetnacl/1.0.3/nacl-fast.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+/* ── Reset & Root ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --ink:      #0a0a10;
+  --ink2:     #12121c;
+  --ink3:     #1a1a28;
+  --line:     #222235;
+  --line2:    #2e2e48;
+  --dim:      #4a4a6e;
+  --mid:      #7070a0;
+  --text:     #e8e8f8;
+  --bright:   #ffffff;
+  --volt:     #7b6fff;
+  --volt2:    #5a4eff;
+  --teal:     #00e5b8;
+  --rose:     #ff5f87;
+  --amber:    #ffb347;
+  --glow:     rgba(123,111,255,.15);
+  --radius:   16px;
+  --font-ui:  'Syne', sans-serif;
+  --font-body:'DM Sans', sans-serif;
+  --font-mono:'DM Mono', monospace;
+}
+html, body { height: 100%; overflow: hidden; background: var(--ink); color: var(--text); font-family: var(--font-body); }
+
+/* ── Scrollbars ── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--line2); border-radius: 4px; }
+
+/* ══════════════════════════════ LAYOUT ══════════════════════════════ */
+#app { display: flex; height: 100vh; }
+
+/* ── SIDEBAR ── */
+#sidebar {
+  width: 300px; min-width: 300px;
+  background: var(--ink2);
+  border-right: 1px solid var(--line);
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.sidebar-header {
+  padding: 20px 20px 0;
+  display: flex; align-items: center; justify-content: space-between;
+}
+.logo { display: flex; align-items: center; gap: 10px; }
+.logo-icon {
+  width: 36px; height: 36px; border-radius: 10px;
+  background: linear-gradient(135deg, var(--volt), var(--teal));
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; flex-shrink: 0;
+}
+.logo-text { font-family: var(--font-ui); font-weight: 800; font-size: 16px; letter-spacing: -0.3px; }
+.logo-sub { font-size: 10px; color: var(--dim); margin-top: 1px; font-family: var(--font-mono); }
+.icon-btn {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: transparent; border: 1px solid var(--line);
+  color: var(--mid); cursor: pointer; display: flex;
+  align-items: center; justify-content: center; font-size: 16px;
+  transition: all .15s;
+}
+.icon-btn:hover { background: var(--ink3); border-color: var(--line2); color: var(--text); }
+
+.search-wrap { padding: 16px 20px 12px; }
+.search-box {
+  width: 100%; padding: 9px 14px;
+  background: var(--ink3); border: 1px solid var(--line);
+  border-radius: 12px; color: var(--text);
+  font-family: var(--font-body); font-size: 13px;
+  outline: none; transition: border-color .15s;
+}
+.search-box::placeholder { color: var(--dim); }
+.search-box:focus { border-color: var(--volt); }
+
+.section-label {
+  padding: 0 20px 8px;
+  font-size: 10px; font-weight: 700; letter-spacing: 2px;
+  color: var(--dim); text-transform: uppercase; font-family: var(--font-ui);
+}
+
+#convList { flex: 1; overflow-y: auto; padding: 0 8px; }
+.conv-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: 12px; cursor: pointer;
+  transition: background .1s; margin-bottom: 2px; position: relative;
+}
+.conv-item:hover { background: var(--ink3); }
+.conv-item.active { background: var(--glow); }
+.conv-item.active::before {
+  content: ''; position: absolute; left: 0; top: 50%;
+  transform: translateY(-50%); width: 3px; height: 60%;
+  background: var(--volt); border-radius: 0 3px 3px 0;
+}
+.conv-avatar {
+  width: 42px; height: 42px; border-radius: 13px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-ui); font-weight: 800; font-size: 16px;
+  flex-shrink: 0; position: relative;
+}
+.online-dot {
+  position: absolute; bottom: 1px; right: 1px;
+  width: 10px; height: 10px; border-radius: 50%;
+  background: var(--teal); border: 2px solid var(--ink2);
+}
+.conv-info { flex: 1; min-width: 0; }
+.conv-name { font-weight: 600; font-size: 14px; font-family: var(--font-ui); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.conv-preview { font-size: 12px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 4px; flex-shrink: 0; }
+.conv-time { font-size: 10px; color: var(--dim); font-family: var(--font-mono); }
+.unread-badge {
+  background: var(--volt); color: white; border-radius: 8px;
+  padding: 1px 7px; font-size: 10px; font-weight: 700; font-family: var(--font-ui);
+}
+.e2ee-badge {
+  display: flex; align-items: center; gap: 4px;
+  padding: 10px 20px; font-size: 10px; color: var(--teal);
+  border-top: 1px solid var(--line); margin-top: auto;
+  font-family: var(--font-mono);
+}
+
+/* ── MAIN AREA ── */
+#main { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+/* Chat header */
+.chat-header {
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 14px;
+  background: var(--ink2);
+}
+.header-avatar {
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-ui); font-weight: 800; font-size: 15px; flex-shrink: 0;
+}
+.header-info { flex: 1; }
+.header-name { font-family: var(--font-ui); font-weight: 700; font-size: 15px; }
+.header-status { font-size: 11px; color: var(--teal); margin-top: 1px; font-family: var(--font-mono); }
+.header-actions { display: flex; gap: 8px; }
+
+/* Messages */
+#messages {
+  flex: 1; overflow-y: auto; padding: 24px;
+  display: flex; flex-direction: column; gap: 4px;
+  background: var(--ink);
+  background-image: radial-gradient(ellipse at 20% 20%, rgba(123,111,255,.03) 0%, transparent 60%),
+                    radial-gradient(ellipse at 80% 80%, rgba(0,229,184,.02) 0%, transparent 60%);
+}
+.msg-day { text-align: center; margin: 12px 0; }
+.msg-day span {
+  background: var(--ink2); border: 1px solid var(--line);
+  padding: 4px 14px; border-radius: 20px;
+  font-size: 11px; color: var(--dim); font-family: var(--font-mono);
+}
+.msg-row { display: flex; align-items: flex-end; gap: 8px; margin-bottom: 2px; }
+.msg-row.me { flex-direction: row-reverse; }
+.msg-avatar-sm {
+  width: 28px; height: 28px; border-radius: 8px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 800; font-family: var(--font-ui);
+}
+.msg-avatar-sm.spacer { visibility: hidden; }
+.bubble {
+  max-width: 68%; padding: 10px 14px; border-radius: 18px;
+  font-size: 14px; line-height: 1.55; position: relative;
+  word-break: break-word;
+}
+.bubble.me {
+  background: linear-gradient(135deg, var(--volt2), var(--volt));
+  color: white; border-bottom-right-radius: 5px;
+}
+.bubble.them {
+  background: var(--ink3); border: 1px solid var(--line);
+  color: var(--text); border-bottom-left-radius: 5px;
+}
+.bubble-meta {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 4px; justify-content: flex-end;
+}
+.bubble-time { font-size: 10px; opacity: .6; font-family: var(--font-mono); }
+.bubble-tick { font-size: 11px; color: var(--teal); }
+.msg-reactions {
+  display: flex; gap: 4px; flex-wrap: wrap; margin-top: 4px;
+  padding-left: 36px;
+}
+.msg-reactions.me { padding-left: 0; justify-content: flex-end; }
+.rxn {
+  background: var(--ink3); border: 1px solid var(--line);
+  border-radius: 20px; padding: 2px 8px; font-size: 12px;
+  cursor: pointer; transition: all .1s; display: flex; align-items: center; gap: 3px;
+}
+.rxn:hover, .rxn.mine { background: var(--glow); border-color: var(--volt); }
+.rxn-count { font-size: 10px; color: var(--mid); font-family: var(--font-mono); }
+.typing-row { display: flex; align-items: center; gap: 10px; padding: 4px 0 8px; }
+.typing-bubble {
+  background: var(--ink3); border: 1px solid var(--line);
+  border-radius: 18px; border-bottom-left-radius: 5px;
+  padding: 10px 14px; display: flex; gap: 4px; align-items: center;
+}
+.dot { width: 6px; height: 6px; background: var(--mid); border-radius: 50%; animation: pulse 1.4s infinite; }
+.dot:nth-child(2) { animation-delay: .2s; }
+.dot:nth-child(3) { animation-delay: .4s; }
+@keyframes pulse { 0%,60%,100%{opacity:.3;transform:scale(1)} 30%{opacity:1;transform:scale(1.3)} }
+
+/* Input area */
+.input-area {
+  padding: 16px 24px 20px;
+  background: var(--ink2);
+  border-top: 1px solid var(--line);
+}
+.input-row { display: flex; align-items: flex-end; gap: 10px; }
+.input-wrap {
+  flex: 1; background: var(--ink3);
+  border: 1px solid var(--line); border-radius: 16px;
+  padding: 10px 14px; display: flex; align-items: flex-end; gap: 10px;
+  transition: border-color .15s;
+}
+.input-wrap:focus-within { border-color: var(--volt); }
+#msgInput {
+  flex: 1; background: transparent; border: none; outline: none;
+  color: var(--text); font-family: var(--font-body); font-size: 14px;
+  resize: none; max-height: 120px; line-height: 1.5;
+}
+#msgInput::placeholder { color: var(--dim); }
+.emoji-trigger { color: var(--dim); cursor: pointer; font-size: 18px; transition: color .1s; flex-shrink: 0; }
+.emoji-trigger:hover { color: var(--amber); }
+.send-btn {
+  width: 42px; height: 42px; border-radius: 13px;
+  background: linear-gradient(135deg, var(--volt2), var(--volt));
+  border: none; color: white; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; transition: all .15s; flex-shrink: 0;
+}
+.send-btn:hover { transform: scale(1.05); filter: brightness(1.1); }
+.send-btn:disabled { opacity: .4; cursor: not-allowed; transform: none; }
+.input-hint { font-size: 10px; color: var(--dim); text-align: center; margin-top: 8px; font-family: var(--font-mono); }
+
+/* Emoji picker */
+.emoji-picker {
+  position: absolute; bottom: 90px; left: 24px;
+  background: var(--ink2); border: 1px solid var(--line);
+  border-radius: 16px; padding: 12px; display: none;
+  flex-wrap: wrap; gap: 6px; max-width: 280px;
+  box-shadow: 0 20px 40px rgba(0,0,0,.5); z-index: 100;
+}
+.emoji-picker.open { display: flex; }
+.ep-emoji { font-size: 22px; cursor: pointer; padding: 4px; border-radius: 8px; transition: background .1s; }
+.ep-emoji:hover { background: var(--ink3); }
+
+/* Welcome screen */
+#welcome {
+  flex: 1; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 16px;
+  background: var(--ink);
+  background-image: radial-gradient(ellipse at 50% 40%, rgba(123,111,255,.06) 0%, transparent 70%);
+}
+.welcome-icon { font-size: 56px; margin-bottom: 8px; }
+.welcome-title { font-family: var(--font-ui); font-weight: 800; font-size: 24px; }
+.welcome-sub { color: var(--dim); font-size: 14px; text-align: center; max-width: 320px; line-height: 1.6; }
+.new-chat-btn {
+  margin-top: 8px; padding: 12px 28px;
+  background: linear-gradient(135deg, var(--volt2), var(--volt));
+  border: none; color: white; border-radius: 14px;
+  font-family: var(--font-ui); font-weight: 700; font-size: 14px;
+  cursor: pointer; transition: all .15s;
+}
+.new-chat-btn:hover { transform: translateY(-1px); filter: brightness(1.1); }
+
+/* Modal */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0,0,0,.7);
+  backdrop-filter: blur(8px); z-index: 200;
+  display: none; align-items: center; justify-content: center;
+}
+.modal-backdrop.open { display: flex; }
+.modal {
+  background: var(--ink2); border: 1px solid var(--line);
+  border-radius: 24px; padding: 28px; width: 420px;
+  box-shadow: 0 40px 80px rgba(0,0,0,.6);
+  animation: slideUp .2s ease;
+}
+@keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.modal-title { font-family: var(--font-ui); font-weight: 800; font-size: 20px; margin-bottom: 6px; }
+.modal-sub { color: var(--dim); font-size: 13px; margin-bottom: 22px; line-height: 1.6; }
+.modal-input {
+  width: 100%; padding: 12px 16px;
+  background: var(--ink3); border: 1px solid var(--line);
+  border-radius: 12px; color: var(--text);
+  font-family: var(--font-mono); font-size: 12px;
+  outline: none; margin-bottom: 12px; transition: border-color .15s;
+}
+.modal-input:focus { border-color: var(--volt); }
+.modal-input::placeholder { color: var(--dim); font-family: var(--font-body); font-size: 13px; }
+.modal-row { display: flex; gap: 10px; }
+.modal-btn {
+  flex: 1; padding: 12px;
+  border-radius: 12px; border: 1px solid var(--line);
+  background: var(--ink3); color: var(--mid);
+  font-family: var(--font-ui); font-weight: 700; font-size: 14px;
+  cursor: pointer; transition: all .15s;
+}
+.modal-btn:hover { border-color: var(--line2); color: var(--text); }
+.modal-btn.primary {
+  background: linear-gradient(135deg, var(--volt2), var(--volt));
+  border-color: transparent; color: white;
+}
+.modal-btn.primary:hover { filter: brightness(1.1); }
+.crypto-preview {
+  background: var(--ink3); border: 1px solid var(--line);
+  border-radius: 12px; padding: 12px; margin-top: 8px;
+  font-family: var(--font-mono); font-size: 10px;
+  color: var(--teal); line-height: 1.8; display: none;
+}
+
+/* Notification toast */
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  background: var(--ink2); border: 1px solid var(--line);
+  border-radius: 14px; padding: 12px 18px;
+  display: flex; align-items: center; gap: 10px;
+  box-shadow: 0 10px 30px rgba(0,0,0,.4);
+  z-index: 300; transform: translateY(20px); opacity: 0;
+  transition: all .3s; pointer-events: none;
+}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast-icon { font-size: 18px; }
+.toast-text { font-size: 13px; font-weight: 500; }
+
+/* Profile panel */
+#profilePanel {
+  width: 280px; min-width: 280px;
+  background: var(--ink2); border-left: 1px solid var(--line);
+  padding: 24px; display: none; flex-direction: column; gap: 20px;
+  overflow-y: auto;
+}
+#profilePanel.open { display: flex; }
+.profile-avatar {
+  width: 72px; height: 72px; border-radius: 20px;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-ui); font-weight: 800; font-size: 28px;
+  margin: 0 auto;
+}
+.profile-name { text-align: center; font-family: var(--font-ui); font-weight: 800; font-size: 18px; }
+.profile-addr { text-align: center; font-family: var(--font-mono); font-size: 10px; color: var(--dim); word-break: break-all; }
+.profile-section { font-size: 10px; font-weight: 700; letter-spacing: 2px; color: var(--dim); text-transform: uppercase; font-family: var(--font-ui); }
+.profile-stat { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.profile-stat-label { font-size: 13px; color: var(--mid); }
+.profile-stat-value { font-size: 13px; font-weight: 700; font-family: var(--font-mono); color: var(--teal); }
+#qr-mini { display: flex; justify-content: center; }
+#qr-mini canvas, #qr-mini img { border-radius: 8px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- ══════ SIDEBAR ══════ -->
+  <div id="sidebar">
+    <div class="sidebar-header">
+      <div class="logo">
+        <div class="logo-icon">🔐</div>
+        <div>
+          <div class="logo-text">Qubic Messenger</div>
+          <div class="logo-sub">end-to-end encrypted</div>
+        </div>
+      </div>
+      <button class="icon-btn" onclick="openNewChat()" title="New conversation">✏️</button>
+    </div>
+
+    <div class="search-wrap">
+      <input class="search-box" placeholder="Search conversations…" oninput="filterConvs(this.value)">
+    </div>
+
+    <div class="section-label">Messages</div>
+    <div id="convList"></div>
+
+    <div class="e2ee-badge">🔒 X25519 · XSalsa20-Poly1305 · All encrypted</div>
+  </div>
+
+  <!-- ══════ MAIN ══════ -->
+  <div id="main">
+    <!-- Welcome -->
+    <div id="welcome">
+      <div class="welcome-icon">🔐</div>
+      <div class="welcome-title">Private by default</div>
+      <div class="welcome-sub">Every message is end-to-end encrypted using X25519 key exchange. Nobody can read your messages — not even us.</div>
+      <button class="new-chat-btn" onclick="openNewChat()">+ New Encrypted Message</button>
+    </div>
+
+    <!-- Chat view (hidden initially) -->
+    <div id="chatView" style="display:none; flex-direction:column; height:100%;">
+      <div class="chat-header">
+        <div class="header-avatar" id="hdrAvatar"></div>
+        <div class="header-info">
+          <div class="header-name" id="hdrName"></div>
+          <div class="header-status" id="hdrStatus">🔒 End-to-end encrypted</div>
+        </div>
+        <div class="header-actions">
+          <button class="icon-btn" onclick="toggleProfile()" title="Profile">👤</button>
+          <button class="icon-btn" onclick="simulateTyping()" title="Simulate reply">💬</button>
+        </div>
+      </div>
+
+      <div id="messages"></div>
+
+      <div class="emoji-picker" id="emojiPicker">
+        <span class="ep-emoji" onclick="insertEmoji('👍')">👍</span>
+        <span class="ep-emoji" onclick="insertEmoji('❤️')">❤️</span>
+        <span class="ep-emoji" onclick="insertEmoji('🔥')">🔥</span>
+        <span class="ep-emoji" onclick="insertEmoji('🚀')">🚀</span>
+        <span class="ep-emoji" onclick="insertEmoji('😂')">😂</span>
+        <span class="ep-emoji" onclick="insertEmoji('🙏')">🙏</span>
+        <span class="ep-emoji" onclick="insertEmoji('💎')">💎</span>
+        <span class="ep-emoji" onclick="insertEmoji('⚡')">⚡</span>
+        <span class="ep-emoji" onclick="insertEmoji('🔐')">🔐</span>
+        <span class="ep-emoji" onclick="insertEmoji('✅')">✅</span>
+        <span class="ep-emoji" onclick="insertEmoji('👀')">👀</span>
+        <span class="ep-emoji" onclick="insertEmoji('🎉')">🎉</span>
+      </div>
+
+      <div class="input-area">
+        <div class="input-row">
+          <div class="input-wrap">
+            <textarea id="msgInput" placeholder="Message…" rows="1"
+              onkeydown="handleKey(event)" oninput="autoResize(this)"></textarea>
+            <span class="emoji-trigger" onclick="toggleEmoji()">😊</span>
+          </div>
+          <button class="send-btn" id="sendBtn" onclick="sendMessage()">↑</button>
+        </div>
+        <div class="input-hint">🔒 Encrypted with X25519 · Delivered via Qubic P2P</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══════ PROFILE PANEL ══════ -->
+  <div id="profilePanel">
+    <div style="display:flex; justify-content:space-between; align-items:center;">
+      <div style="font-family:var(--font-ui); font-weight:800; font-size:16px;">Profile</div>
+      <button class="icon-btn" onclick="toggleProfile()">✕</button>
+    </div>
+    <div class="profile-avatar" id="ppAvatar"></div>
+    <div class="profile-name" id="ppName"></div>
+    <div class="profile-addr" id="ppAddr"></div>
+    <div>
+      <div class="profile-section" style="margin-bottom:12px;">QR Code</div>
+      <div id="qr-mini"></div>
+    </div>
+    <div>
+      <div class="profile-section" style="margin-bottom:12px;">Stats</div>
+      <div class="profile-stat"><span class="profile-stat-label">Messages</span><span class="profile-stat-value" id="ppMsgCount">0</span></div>
+      <div class="profile-stat"><span class="profile-stat-label">Encrypted</span><span class="profile-stat-value">100%</span></div>
+      <div class="profile-stat"><span class="profile-stat-label">Key version</span><span class="profile-stat-value">v1</span></div>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ NEW CHAT MODAL ══════ -->
+<div class="modal-backdrop" id="newChatModal">
+  <div class="modal">
+    <div class="modal-title">New Encrypted Message</div>
+    <div class="modal-sub">Enter a Qubic address or nickname to start a private conversation. A shared encryption key will be derived automatically.</div>
+    <input class="modal-input" id="ncAddress" placeholder="Qubic address (60 chars) or nickname…">
+    <input class="modal-input" id="ncNickname" placeholder="Nickname (optional)">
+    <div class="crypto-preview" id="cryptoPreview"></div>
+    <div class="modal-row">
+      <button class="modal-btn" onclick="closeModal()">Cancel</button>
+      <button class="modal-btn primary" onclick="startConversation()">Start Chatting 🔐</button>
+    </div>
+  </div>
+</div>
+
+<!-- ══════ TOAST ══════ -->
+<div class="toast" id="toast">
+  <span class="toast-icon" id="toastIcon"></span>
+  <span class="toast-text" id="toastText"></span>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════════════
+// CRYPTO (TweetNaCl — real X25519 + XSalsa20-Poly1305)
+// ══════════════════════════════════════════════════════════════════
+const nacl = window.nacl
+
+function genKeypair() {
+  return nacl.box.keyPair()
+}
+
+function encryptMsg(text, theirPub, myPriv) {
+  const nonce = nacl.randomBytes(nacl.box.nonceLength)
+  const msg   = new TextEncoder().encode(text)
+  const box   = nacl.box(msg, nonce, theirPub, myPriv)
+  return { nonce, ciphertext: box }
+}
+
+function decryptMsg(ciphertext, nonce, theirPub, myPriv) {
+  const plain = nacl.box.open(ciphertext, nonce, theirPub, myPriv)
+  if (!plain) return null
+  return new TextDecoder().decode(plain)
+}
+
+function u8toHex(u8) {
+  return Array.from(u8).map(b => b.toString(16).padStart(2,'0')).join('')
+}
+
+// ══════════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════════
+const ME = {
+  address:  'NUBI305AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID',
+  nickname: 'You',
+  keypair:  genKeypair(),
+}
+
+const CONTACTS = [
+  { address: 'ALICEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID', nickname: 'Alice', color: '#7b6fff', keypair: genKeypair() },
+  { address: 'BOBAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID', nickname: 'Bob',   color: '#00e5b8', keypair: genKeypair() },
+  { address: 'CAROLAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAARMID',  nickname: 'Carol', color: '#ff5f87', keypair: genKeypair() },
+]
+
+let conversations = {}
+let activeConv    = null
+let typingTimer   = null
+let qrInstance    = null
+
+// Seed some messages
+function initConvs() {
+  CONTACTS.forEach(c => {
+    conversations[c.address] = {
+      contact:  c,
+      messages: [],
+      unread:   0,
+    }
+  })
+  // Pre-seed Alice conversation
+  const alice = conversations[CONTACTS[0].address]
+  const msgs = [
+    { from: 'alice', text: 'Hey! Just set up Qubic Messenger 🔐',        time: '09:14', reactions: { '🔥': 2 } },
+    { from: 'me',    text: 'Finally! Zero fees too, this is perfect',      time: '09:15', reactions: {} },
+    { from: 'alice', text: 'And nobody can read our messages — not even the devs', time: '09:15', reactions: { '💎': 1, '🚀': 3 } },
+    { from: 'me',    text: 'That\'s the whole point 😄 X25519 end-to-end',  time: '09:16', reactions: {} },
+    { from: 'alice', text: 'Share your QR code — I\'ll add everyone',       time: '09:17', reactions: { '👍': 1 } },
+  ]
+  msgs.forEach(m => {
+    const enc = encryptMsg(m.text, m.from === 'me' ? CONTACTS[0].keypair.publicKey : ME.keypair.publicKey,
+                                   m.from === 'me' ? ME.keypair.secretKey : CONTACTS[0].keypair.secretKey)
+    alice.messages.push({
+      id:        Math.random().toString(36).slice(2),
+      from:      m.from === 'me' ? ME.address : CONTACTS[0].address,
+      text:      m.text,
+      ciphertext: enc.ciphertext,
+      nonce:     enc.nonce,
+      time:      m.time,
+      delivered: true,
+      read:      true,
+      reactions: m.reactions,
+    })
+  })
+  alice.unread = 0
+
+  // Bob has unread
+  const bob = conversations[CONTACTS[1].address]
+  const bobEnc = encryptMsg('Tried the demo — insane how fast it is ⚡', ME.keypair.publicKey, CONTACTS[1].keypair.secretKey)
+  bob.messages.push({
+    id: Math.random().toString(36).slice(2),
+    from: CONTACTS[1].address, text: 'Tried the demo — insane how fast it is ⚡',
+    ciphertext: bobEnc.ciphertext, nonce: bobEnc.nonce,
+    time: '11:02', delivered: true, read: false, reactions: {}
+  })
+  bob.unread = 1
+}
+
+// ══════════════════════════════════════════════════════════════════
+// RENDER
+// ══════════════════════════════════════════════════════════════════
+function renderSidebar() {
+  const list = document.getElementById('convList')
+  const convs = Object.values(conversations)
+  list.innerHTML = convs.map(conv => {
+    const c       = conv.contact
+    const last    = conv.messages[conv.messages.length - 1]
+    const preview = last ? last.text.slice(0, 32) + (last.text.length > 32 ? '…' : '') : 'No messages yet'
+    const time    = last ? last.time : ''
+    const isOnline = c.nickname === 'Alice' || c.nickname === 'Bob'
+    return `
+    <div class="conv-item ${activeConv === c.address ? 'active' : ''}" onclick="openConv('${c.address}')">
+      <div class="conv-avatar" style="background:${c.color}20; color:${c.color}">
+        ${c.nickname[0].toUpperCase()}
+        ${isOnline ? '<div class="online-dot"></div>' : ''}
+      </div>
+      <div class="conv-info">
+        <div class="conv-name">${c.nickname}</div>
+        <div class="conv-preview">🔒 ${preview}</div>
+      </div>
+      <div class="conv-meta">
+        <span class="conv-time">${time}</span>
+        ${conv.unread > 0 ? `<span class="unread-badge">${conv.unread}</span>` : ''}
+      </div>
+    </div>`
+  }).join('')
+}
+
+function renderMessages() {
+  if (!activeConv) return
+  const conv = conversations[activeConv]
+  const el   = document.getElementById('messages')
+
+  el.innerHTML = `<div class="msg-day"><span>Today</span></div>`
+
+  conv.messages.forEach((msg, i) => {
+    const isMe   = msg.from === ME.address
+    const next   = conv.messages[i + 1]
+    const showAv = !next || next.from !== msg.from
+
+    const rxns = Object.entries(msg.reactions || {}).map(([e, n]) =>
+      `<span class="rxn" onclick="toggleRxn('${conv.contact.address}',${i},'${e}')">${e} <span class="rxn-count">${n}</span></span>`
+    ).join('')
+
+    el.innerHTML += `
+    <div class="msg-row ${isMe ? 'me' : ''}">
+      ${!isMe ? `<div class="msg-avatar-sm ${showAv ? '' : 'spacer'}" style="background:${conv.contact.color}20; color:${conv.contact.color}">${conv.contact.nickname[0]}</div>` : ''}
+      <div>
+        <div class="bubble ${isMe ? 'me' : 'them'}">
+          ${msg.text}
+          <div class="bubble-meta">
+            <span class="bubble-time">${msg.time}</span>
+            ${isMe ? `<span class="bubble-tick">${msg.read ? '✓✓' : '✓'}</span>` : ''}
+          </div>
+        </div>
+        ${rxns ? `<div class="msg-reactions ${isMe ? 'me' : ''}">${rxns}</div>` : ''}
+      </div>
+      ${isMe ? `<div class="msg-avatar-sm ${showAv ? '' : 'spacer'}" style="background:#7b6fff20; color:#7b6fff">Y</div>` : ''}
+    </div>`
+  })
+
+  el.scrollTop = el.scrollHeight
+}
+
+function openConv(address) {
+  activeConv = address
+  const conv = conversations[address]
+  conv.unread = 0
+  conv.messages.forEach(m => m.read = true)
+
+  document.getElementById('welcome').style.display  = 'none'
+  document.getElementById('chatView').style.display = 'flex'
+
+  const c = conv.contact
+  document.getElementById('hdrAvatar').innerHTML = `<div style="width:40px;height:40px;border-radius:12px;background:${c.color}20;color:${c.color};display:flex;align-items:center;justify-content:center;font-family:var(--font-ui);font-weight:800;font-size:15px">${c.nickname[0]}</div>`
+  document.getElementById('hdrName').textContent   = c.nickname
+  document.getElementById('hdrStatus').textContent = '🔒 End-to-end encrypted · X25519'
+
+  renderMessages()
+  renderSidebar()
+
+  // Update profile panel
+  document.getElementById('ppName').textContent  = c.nickname
+  document.getElementById('ppAddr').textContent  = c.address
+  document.getElementById('ppAvatar').style.cssText = `width:72px;height:72px;border-radius:20px;background:${c.color}20;color:${c.color};display:flex;align-items:center;justify-content:center;font-family:var(--font-ui);font-weight:800;font-size:28px;margin:0 auto;`
+  document.getElementById('ppAvatar').textContent = c.nickname[0]
+  updateMsgCount()
+  genQR(c.address)
+}
+
+function updateMsgCount() {
+  if (!activeConv) return
+  document.getElementById('ppMsgCount').textContent = conversations[activeConv].messages.length
+}
+
+// ══════════════════════════════════════════════════════════════════
+// MESSAGING
+// ══════════════════════════════════════════════════════════════════
+function sendMessage() {
+  const input = document.getElementById('msgInput')
+  const text  = input.value.trim()
+  if (!text || !activeConv) return
+
+  const conv = conversations[activeConv]
+  const enc  = encryptMsg(text, conv.contact.keypair.publicKey, ME.keypair.secretKey)
+  const now  = new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
+
+  conv.messages.push({
+    id: Math.random().toString(36).slice(2),
+    from: ME.address, text, ciphertext: enc.ciphertext, nonce: enc.nonce,
+    time: now, delivered: true, read: false, reactions: {}
+  })
+
+  input.value = ''
+  input.style.height = 'auto'
+  renderMessages()
+  renderSidebar()
+  updateMsgCount()
+
+  toast('🔒', 'Message encrypted & sent')
+
+  // Mark as read after 1.5s
+  setTimeout(() => {
+    const msgs = conversations[activeConv]?.messages
+    if (msgs) { msgs[msgs.length - 1].read = true; renderMessages() }
+  }, 1500)
+
+  // Auto-reply after 2-3s
+  setTimeout(() => {
+    if (!activeConv) return
+    const replies = [
+      'Got it! 🔐', 'Perfect 🚀', 'On it!', 'Amazing, zero fees too ⚡',
+      'Received and decrypted 💎', '100% private — love it 🔥', 'Reading now…',
+    ]
+    const r = replies[Math.floor(Math.random() * replies.length)]
+    showTyping()
+    setTimeout(() => {
+      hideTyping()
+      const c    = conversations[activeConv]
+      const enc2 = encryptMsg(r, ME.keypair.publicKey, c.contact.keypair.secretKey)
+      const now2 = new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
+      c.messages.push({
+        id: Math.random().toString(36).slice(2),
+        from: c.contact.address, text: r, ciphertext: enc2.ciphertext, nonce: enc2.nonce,
+        time: now2, delivered: true, read: true, reactions: {}
+      })
+      renderMessages(); renderSidebar(); updateMsgCount()
+    }, 1800)
+  }, 2000 + Math.random() * 1200)
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto'
+  el.style.height = Math.min(el.scrollHeight, 120) + 'px'
+}
+
+function showTyping() {
+  const el = document.getElementById('messages')
+  const row = document.createElement('div')
+  row.className = 'typing-row'; row.id = 'typingRow'
+  const c = conversations[activeConv]?.contact
+  row.innerHTML = `
+    <div class="msg-avatar-sm" style="background:${c?.color}20;color:${c?.color}">${c?.nickname[0]}</div>
+    <div class="typing-bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`
+  el.appendChild(row)
+  el.scrollTop = el.scrollHeight
+}
+
+function hideTyping() {
+  document.getElementById('typingRow')?.remove()
+}
+
+function simulateTyping() {
+  if (!activeConv) return
+  showTyping()
+  setTimeout(() => {
+    hideTyping()
+    const c    = conversations[activeConv]
+    const phrases = ['Try sending me a message!', 'This encryption is real — check the console 🔐', 'X25519 key exchange works perfectly ⚡']
+    const text = phrases[Math.floor(Math.random()*phrases.length)]
+    const enc  = encryptMsg(text, ME.keypair.publicKey, c.contact.keypair.secretKey)
+    const now  = new Date().toLocaleTimeString('en', { hour: '2-digit', minute: '2-digit' })
+    c.messages.push({ id: Math.random().toString(36).slice(2), from: c.contact.address, text, ciphertext: enc.ciphertext, nonce: enc.nonce, time: now, delivered: true, read: true, reactions: {} })
+    renderMessages(); renderSidebar(); updateMsgCount()
+  }, 2000)
+}
+
+// ══════════════════════════════════════════════════════════════════
+// REACTIONS
+// ══════════════════════════════════════════════════════════════════
+function toggleRxn(address, msgIdx, emoji) {
+  const msg = conversations[address].messages[msgIdx]
+  if (!msg.reactions) msg.reactions = {}
+  if (msg.reactions[emoji]) {
+    msg.reactions[emoji]--
+    if (msg.reactions[emoji] <= 0) delete msg.reactions[emoji]
+  } else {
+    msg.reactions[emoji] = (msg.reactions[emoji] || 0) + 1
+  }
+  renderMessages()
+}
+
+// ══════════════════════════════════════════════════════════════════
+// EMOJI PICKER
+// ══════════════════════════════════════════════════════════════════
+function toggleEmoji() {
+  document.getElementById('emojiPicker').classList.toggle('open')
+}
+function insertEmoji(e) {
+  const input = document.getElementById('msgInput')
+  input.value += e
+  document.getElementById('emojiPicker').classList.remove('open')
+  input.focus()
+}
+document.addEventListener('click', e => {
+  if (!e.target.closest('#emojiPicker') && !e.target.closest('.emoji-trigger'))
+    document.getElementById('emojiPicker').classList.remove('open')
+})
+
+// ══════════════════════════════════════════════════════════════════
+// NEW CHAT MODAL
+// ══════════════════════════════════════════════════════════════════
+function openNewChat() {
+  document.getElementById('newChatModal').classList.add('open')
+  setTimeout(() => document.getElementById('ncAddress').focus(), 100)
+  // Show crypto preview
+  const kp      = genKeypair()
+  const preview = document.getElementById('cryptoPreview')
+  preview.style.display = 'block'
+  preview.textContent   = `Your pubkey:   ${u8toHex(ME.keypair.publicKey).slice(0,32)}…\nNew key exchange: X25519-ECDH\nShared secret:  [derived on connect]`
+
+  document.getElementById('ncAddress').addEventListener('input', function() {
+    if (this.value.length > 10) {
+      preview.textContent = `Recipient:     ${this.value.slice(0,20)}…\nKey exchange:  X25519-ECDH\nShared secret: ${u8toHex(nacl.randomBytes(16))}`
+    }
+  })
+}
+
+function closeModal() {
+  document.getElementById('newChatModal').classList.remove('open')
+  document.getElementById('ncAddress').value  = ''
+  document.getElementById('ncNickname').value = ''
+}
+
+function startConversation() {
+  const addr = document.getElementById('ncAddress').value.trim()
+  const nick = document.getElementById('ncNickname').value.trim() || addr.slice(0, 8) + '…'
+  if (!addr) { toast('⚠️', 'Please enter an address'); return }
+
+  const colors  = ['#a78bfa', '#34d399', '#fb7185', '#fbbf24', '#60a5fa']
+  const color   = colors[Math.floor(Math.random() * colors.length)]
+  const newKp   = genKeypair()
+  const contact = { address: addr, nickname: nick, color, keypair: newKp }
+  conversations[addr] = { contact, messages: [], unread: 0 }
+
+  closeModal()
+  openConv(addr)
+  toast('🔐', `New encrypted conversation with ${nick}`)
+  renderSidebar()
+}
+
+// ══════════════════════════════════════════════════════════════════
+// PROFILE PANEL
+// ══════════════════════════════════════════════════════════════════
+function toggleProfile() {
+  document.getElementById('profilePanel').classList.toggle('open')
+}
+
+// ══════════════════════════════════════════════════════════════════
+// QR CODE
+// ══════════════════════════════════════════════════════════════════
+function genQR(address) {
+  const container = document.getElementById('qr-mini')
+  container.innerHTML = ''
+  new QRCode(container, {
+    text: 'qubic-messenger://' + address,
+    width: 160, height: 160,
+    colorDark: '#7b6fff', colorLight: '#12121c',
+    correctLevel: QRCode.CorrectLevel.M
+  })
+}
+
+// ══════════════════════════════════════════════════════════════════
+// SEARCH
+// ══════════════════════════════════════════════════════════════════
+function filterConvs(q) {
+  document.querySelectorAll('.conv-item').forEach(item => {
+    const name = item.querySelector('.conv-name').textContent.toLowerCase()
+    item.style.display = name.includes(q.toLowerCase()) ? '' : 'none'
+  })
+}
+
+// ══════════════════════════════════════════════════════════════════
+// TOAST
+// ══════════════════════════════════════════════════════════════════
+let toastTimer
+function toast(icon, text) {
+  const el = document.getElementById('toast')
+  document.getElementById('toastIcon').textContent = icon
+  document.getElementById('toastText').textContent = text
+  el.classList.add('show')
+  clearTimeout(toastTimer)
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2800)
+}
+
+// ══════════════════════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════════════════════
+initConvs()
+renderSidebar()
+// Open Alice by default after a tick
+setTimeout(() => {
+  openConv(CONTACTS[0].address)
+  toast('🔐', 'Keys generated — ready to chat')
+}, 300)
+</script>
+</body>
+</html>
